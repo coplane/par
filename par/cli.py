@@ -2,7 +2,7 @@
 import typer
 from typing_extensions import Annotated
 
-from . import actions
+from . import core
 
 app = typer.Typer(
     name="par",
@@ -49,7 +49,7 @@ def start(
     Start a new git worktree and tmux session.
     Creates a worktree, a git branch (both named <label>), and a tmux session.
     """
-    actions.start_new_session(label)
+    core.start_session(label)
 
 
 @app.command()
@@ -68,7 +68,7 @@ def send(
     Send a command to a specific session or all sessions.
     The command will be followed by an 'Enter' key press in the tmux session.
     """
-    actions.send_command_to_sessions(target, command_to_send)
+    core.send_command(target, command_to_send)
 
 
 @app.command(name="ls")
@@ -77,7 +77,7 @@ def list_sessions():
     List all 'par'-managed sessions for the current repository.
     Shows label, tmux session name, worktree path, and branch.
     """
-    actions.list_sessions_action()
+    core.list_sessions()
 
 
 @app.command()
@@ -91,9 +91,9 @@ def rm(
     This kills the tmux session, removes the git worktree, and deletes the associated git branch.
     """
     if target.lower() == "all":
-        actions.remove_all_sessions_action()
+        core.remove_all_sessions()
     else:
-        actions.remove_session_action(target)
+        core.remove_session(target)
 
 
 @app.command()
@@ -106,7 +106,7 @@ def open(
     Open/attach to a specific 'par'-managed tmux session.
     If inside tmux, switches client. If outside, attaches.
     """
-    actions.open_session_action(label)
+    core.open_session(label)
 
 
 @app.command(name="control-center")
@@ -115,7 +115,7 @@ def control_center():
     Open all 'par'-managed sessions in a tiled tmux window (control center view).
     Must be run from within an existing tmux session.
     """
-    actions.open_control_center_action()
+    core.open_control_center()
 
 
 # This is for `python -m par`

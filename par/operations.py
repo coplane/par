@@ -1,0 +1,197 @@
+"""Git and tmux operations - simplified from git.py and tmux.py"""
+
+import os
+import subprocess
+from pathlib import Path
+from typing import List, Optional
+
+import typer
+
+from .utils import get_git_repo_root, run_cmd
+
+
+# Tmux utilities
+def _check_tmux():
+    """Ensure tmux is available and running."""
+    try:
+        run_cmd(
+            ["tmux", "has-session"], check=False, capture=True, suppress_output=True
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        typer.secho("Error: tmux not available or not running.", fg="red", err=True)
+        raise typer.Exit(1)
+
+
+# Git operations
+def create_worktree(label: str, worktree_path: Path, base_branch: Optional[str] = None):
+    """Create a new git worktree and branch."""
+    repo_root = get_git_repo_root()
+    cmd = ["git", "worktree", "add", "-b", label, str(worktree_path)]
+    if base_branch:
+        cmd.append(base_branch)
+
+    try:
+        run_cmd(cmd, cwd=repo_root)
+        typer.secho(f"Created worktree '{label}' at {worktree_path}", fg="green")
+    except Exception as e:
+        typer.secho(f"Failed to create worktree '{label}': {e}", fg="red", err=True)
+        raise typer.Exit(1)
+
+
+def remove_worktree(worktree_path: Path):
+    """Remove a git worktree."""
+    repo_root = get_git_repo_root()
+    cmd = ["git", "worktree", "remove", "--force", str(worktree_path)]
+
+    try:
+        run_cmd(cmd, cwd=repo_root, suppress_output=True)
+        typer.secho(f"Removed worktree at {worktree_path}", fg="green")
+    except Exception:
+        # Often fails if path doesn't exist - that's OK during cleanup
+        pass
+
+
+def delete_branch(branch_name: str):
+    """Delete a git branch."""
+    repo_root = get_git_repo_root()
+    cmd = ["git", "branch", "-D", branch_name]
+
+    try:
+        run_cmd(cmd, cwd=repo_root, suppress_output=True)
+        typer.secho(f"Deleted branch '{branch_name}'", fg="green")
+    except Exception:
+        # Often fails if branch doesn't exist - that's OK during cleanup
+        pass
+
+
+# Tmux operations
+def tmux_session_exists(session_name: str) -> bool:
+    """Check if a tmux session exists."""
+    _check_tmux()
+    result = run_cmd(
+        ["tmux", "has-session", "-t", session_name],
+        check=False,
+        capture=True,
+        suppress_output=True,
+    )
+    return result.returncode == 0
+
+
+def create_tmux_session(session_name: str, worktree_path: Path):
+    """Create a new detached tmux session."""
+    _check_tmux()
+    cmd = ["tmux", "new-session", "-d", "-s", session_name, "-c", str(worktree_path)]
+
+    try:
+        run_cmd(cmd)
+        typer.secho(f"Created tmux session '{session_name}'", fg="green")
+    except Exception as e:
+        typer.secho(
+            f"Failed to create tmux session '{session_name}': {e}", fg="red", err=True
+        )
+        raise typer.Exit(1)
+
+
+def kill_tmux_session(session_name: str):
+    """Kill a tmux session."""
+    _check_tmux()
+    cmd = ["tmux", "kill-session", "-t", session_name]
+
+    try:
+        run_cmd(cmd, check=False, suppress_output=True)
+    except Exception:
+        # Session might not exist - that's fine during cleanup
+        pass
+
+
+def send_tmux_keys(session_name: str, command: str, pane: str = "0"):
+    """Send keys (command) to a tmux session."""
+    _check_tmux()
+    target = f"{session_name}:{pane}"
+    cmd = ["tmux", "send-keys", "-t", target, command, "Enter"]
+
+    try:
+        run_cmd(cmd)
+        typer.secho(f"Sent command to session '{session_name}'", fg="cyan")
+    except Exception as e:
+        typer.secho(f"Failed to send command: {e}", fg="red", err=True)
+
+
+def open_tmux_session(session_name: str):
+    """Attach to or switch to a tmux session."""
+    _check_tmux()
+
+    if os.getenv("TMUX"):  # Inside tmux
+        typer.echo(f"Switching to session '{session_name}'...")
+        run_cmd(["tmux", "switch-client", "-t", session_name])
+    else:  # Outside tmux
+        typer.echo(f"Attaching to session '{session_name}'...")
+        try:
+            os.execvp("tmux", ["tmux", "attach-session", "-t", session_name])
+        except Exception as e:
+            typer.secho(f"Failed to attach to session: {e}", fg="red", err=True)
+            raise typer.Exit(1)
+
+
+def open_control_center(sessions_data: List[dict]):
+    """Open all sessions in a control center with tiled panes."""
+    _check_tmux()
+
+    if os.getenv("TMUX"):
+        typer.secho(
+            "Error: Control center must be run outside tmux.", fg="red", err=True
+        )
+        raise typer.Exit(1)
+
+    if not sessions_data:
+        typer.secho("No sessions to display.", fg="yellow")
+        return
+
+    # Import here to avoid circular dependency
+    from .utils import get_tmux_session_name
+
+    repo_root = get_git_repo_root()
+    cc_session_name = get_tmux_session_name(repo_root, "cc")
+
+    # Check if control center already exists
+    if tmux_session_exists(cc_session_name):
+        typer.secho(
+            f"Attaching to existing control center '{cc_session_name}'", fg="cyan"
+        )
+        open_tmux_session(cc_session_name)
+        return
+
+    # Create new control center session
+    first_session = sessions_data[0]
+    create_tmux_session(cc_session_name, Path(first_session["worktree_path"]))
+
+    # Set up first pane
+    attach_cmd = f"TMUX= tmux attach-session -t {first_session['tmux_session_name']}"
+    send_tmux_keys(cc_session_name, attach_cmd)
+
+    # Add other sessions in split panes
+    for session_data in sessions_data[1:]:
+        attach_cmd = f"TMUX= tmux attach-session -t {session_data['tmux_session_name']}"
+
+        # Split horizontally and set working directory
+        run_cmd(
+            [
+                "tmux",
+                "split-window",
+                "-h",
+                "-t",
+                cc_session_name,
+                "-c",
+                str(session_data["worktree_path"]),
+            ]
+        )
+        send_tmux_keys(cc_session_name, attach_cmd)
+
+        # Re-tile after each split
+        run_cmd(["tmux", "select-layout", "-t", cc_session_name, "tiled"])
+
+    # Final layout and attach
+    run_cmd(["tmux", "select-layout", "-t", cc_session_name, "tiled"])
+
+    typer.secho(f"Created control center with {len(sessions_data)} panes.", fg="green")
+    open_tmux_session(cc_session_name)

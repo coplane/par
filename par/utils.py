@@ -1,8 +1,10 @@
+"""Simplified utilities for par"""
+
 import hashlib
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import typer
 
@@ -12,85 +14,82 @@ def run_cmd(
     cwd: Optional[Path | str] = None,
     check: bool = True,
     capture: bool = True,
-    env: Optional[Dict[str, str]] = None,
     suppress_output: bool = False,
 ) -> subprocess.CompletedProcess:
-    """Runs a shell command."""
-    if not suppress_output:
-        # For debugging, consider using a logger or a verbose flag
-        # typer.echo(f"Running: {' '.join(command)}{f' in {cwd}' if cwd else ''}", err=True)
-        pass
+    """Run a shell command with simplified error handling."""
     try:
-        process_env = os.environ.copy()
-        if env:
-            process_env.update(env)
-
         result = subprocess.run(
             command,
             cwd=str(cwd) if cwd else None,
             capture_output=capture,
             text=True,
             check=check,
-            env=process_env,
+            env=os.environ.copy(),
         )
         return result
     except subprocess.CalledProcessError as e:
         if not suppress_output:
-            typer.secho(
-                f"Error running command: {' '.join(command)}",
-                fg=typer.colors.RED,
-                err=True,
-            )
-            if e.stdout:
-                typer.secho(f"STDOUT:\n{e.stdout}", fg=typer.colors.YELLOW, err=True)
+            typer.secho(f"Command failed: {' '.join(command)}", fg="red", err=True)
             if e.stderr:
-                typer.secho(f"STDERR:\n{e.stderr}", fg=typer.colors.RED, err=True)
+                typer.secho(e.stderr.strip(), fg="red", err=True)
         raise
     except FileNotFoundError:
-        typer.secho(
-            f"Error: Command '{command[0]}' not found.", fg=typer.colors.RED, err=True
-        )
-        raise typer.Exit(code=127)
+        typer.secho(f"Command not found: {command[0]}", fg="red", err=True)
+        raise typer.Exit(127)
 
 
 def get_git_repo_root() -> Path:
-    """Gets the root directory of the current git repository."""
+    """Get the root directory of the current git repository."""
     try:
         result = run_cmd(
             ["git", "rev-parse", "--show-toplevel"],
             capture=True,
             suppress_output=True,
-            cwd=Path.cwd(),
         )
         return Path(result.stdout.strip())
     except (subprocess.CalledProcessError, typer.Exit):
+        typer.secho("Error: Not in a git repository.", fg="red", err=True)
         typer.secho(
-            "Error: Not inside a git repository, or 'git' command failed.",
-            fg=typer.colors.RED,
-            err=True,
+            "Please run par commands from within a git repository.", fg="red", err=True
         )
-        typer.secho(
-            "Please navigate to a git repository to use 'par' commands that require repository context.",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(code=1)
+        raise typer.Exit(1)
 
 
-def get_repo_id(repo_root: Path) -> str:  # New function
-    """Generates a unique, filesystem-friendly ID for the repository."""
-    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:12]
-
-
-def get_data_dir() -> Path:  # (ensure it exists)
-    """Gets the application's data directory."""
+def get_data_dir() -> Path:
+    """Get par's data directory."""
     xdg_data_home = os.getenv("XDG_DATA_HOME")
     if xdg_data_home:
         data_dir = Path(xdg_data_home) / "par"
     else:
         data_dir = Path.home() / ".local" / "share" / "par"
-    data_dir.mkdir(parents=True, exist_ok=True)  # Ensure it's created
+
+    data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
+
+
+def _get_repo_id(repo_root: Path) -> str:
+    """Generate a unique ID for the repository."""
+    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:8]
+
+
+def get_worktree_path(repo_root: Path, label: str) -> Path:
+    """Get the path for a worktree."""
+    repo_id = _get_repo_id(repo_root)
+    worktrees_dir = get_data_dir() / "worktrees" / repo_id
+    worktrees_dir.mkdir(parents=True, exist_ok=True)
+    return worktrees_dir / label
+
+
+def get_tmux_session_name(repo_root: Path, label: str) -> str:
+    """Generate a tmux session name."""
+    repo_name = repo_root.name.lower().replace(" ", "-").replace(".", "-")[:15]
+    repo_id = _get_repo_id(repo_root)[:4]
+    return f"par-{repo_name}-{repo_id}-{label}"
+
+
+def get_repo_id(repo_root: Path) -> str:  # New function
+    """Generates a unique, filesystem-friendly ID for the repository."""
+    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:12]
 
 
 def get_worktrees_base_dir() -> Path:  # New function (ensure it exists)
@@ -108,11 +107,6 @@ def get_repo_worktrees_dir(repo_root: Path) -> Path:  # New function (ensure it 
     return d
 
 
-def get_worktree_path(repo_root: Path, label: str) -> Path:  # Updated
-    """Gets the path for a specific worktree within its repository's namespaced folder."""
-    return get_repo_worktrees_dir(repo_root) / label
-
-
 def is_tmux_running() -> bool:
     """Checks if a tmux server is running."""
     try:
@@ -124,16 +118,3 @@ def is_tmux_running() -> bool:
         return False
     except subprocess.CalledProcessError:  # Should not happen with check=False
         return False
-
-
-TMUX_SESSION_PREFIX = "par"
-
-
-def get_tmux_session_name(repo_root: Path, label: str) -> str:  # Updated
-    """Generates the tmux session name, namespaced by repository."""
-    # Using basename of repo_root for readability, plus part of hash for uniqueness if names collide
-    repo_name_part = (
-        repo_root.name.lower().replace(" ", "-").replace(".", "-")[:15]
-    )  # Sanitize and shorten
-    repo_hash_part = get_repo_id(repo_root)[:4]  # Short hash part
-    return f"{TMUX_SESSION_PREFIX}-{repo_name_part}-{repo_hash_part}-{label}"
