@@ -16,6 +16,10 @@ Tools like OpenAI Codex, Claude Code, and other coding agents have made it easie
 - **📡 Remote Control**: Send commands to any or all sessions
 - **👁️ Overview Mode**: Monitor all workspaces simultaneously
 
+https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
+
+
+
 ## Key Features
 
 ### 🚀 **Quick Start**
