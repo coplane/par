@@ -1,0 +1,15 @@
+[project]
+name = "par"
+version = "0.1.0"
+description = "Parallel repo sessions manager"
+authors = [ { name="Victor", email="vimota@gmail.com" } ]
+requires-python = ">=3.12"
+dependencies = [
+    "typer",
+]
+
+[tool.uv]
+package = true
+
+[project.scripts]
+par = "par:app"
