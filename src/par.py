@@ -25,7 +25,7 @@ def save_state(state):
 def start(label: str):
     """Start a git worktree and tmux session"""
     branch = label
-    worktree = Path.cwd() / f"{label}"
+    worktree = Path.cwd() / ".par" / f"{label}"
     subprocess.run(["git", "worktree", "add", "-b", branch, str(worktree)], check=True)
     session = f"par-{label}"
     subprocess.run(
@@ -82,32 +82,86 @@ def attach(label: str):
         typer.echo("Label not found", err=True)
         raise typer.Exit(code=1)
     session = info["session"]
-    os.execvp("tmux", ["tmux", "attach-session", "-t", session])
+
+    # Check if we're already inside tmux
+    if os.environ.get("TMUX"):
+        # We're inside tmux, so switch to the session instead of attaching
+        os.execvp("tmux", ["tmux", "switch-client", "-t", session])
+    else:
+        # We're not inside tmux, so attach normally
+        os.execvp("tmux", ["tmux", "attach-session", "-t", session])
 
 
 @app.command()
 def attach_all():
     """Open all sessions in tmux panes"""
     state = load_state()
-    first = True
-    for info in state.values():
+    if not state:
+        typer.echo("No sessions found", err=True)
+        return
+
+    control_session = "par-control"
+
+    # Check if the control session already exists
+    result = subprocess.run(
+        ["tmux", "has-session", "-t", control_session], capture_output=True
+    )
+
+    if result.returncode == 0:
+        # Session exists, just attach to it
+        typer.echo("Control session already exists, attaching...")
+        os.execvp("tmux", ["tmux", "attach-session", "-t", control_session])
+        return
+
+    # Session doesn't exist, create it
+    (first_label, first_info), *remaining_items = state.items()
+
+    # Create the control session
+    subprocess.run(
+        [
+            "tmux",
+            "new-session",
+            "-d",
+            "-s",
+            control_session,
+            "-c",
+            first_info["worktree"],
+        ]
+    )
+
+    subprocess.run(
+        [
+            "tmux",
+            "send-keys",
+            "-t",
+            control_session,
+            f"echo 'Session: {first_label} ({first_info['session']})'",
+            "Enter",
+        ]
+    )
+
+    # Add panes for the remaining sessions
+    for label, info in remaining_items:
+        worktree = info["worktree"]
         session = info["session"]
-        if first:
-            subprocess.run(
-                [
-                    "tmux",
-                    "new-window",
-                    "-n",
-                    "par",
-                    "tmux",
-                    "attach-session",
-                    "-t",
-                    session,
-                ]
-            )
-            first = False
-        else:
-            subprocess.run(
-                ["tmux", "split-window", "-h", "tmux", "attach-session", "-t", session]
-            )
-    typer.echo("Opened control center")
+
+        subprocess.run(
+            ["tmux", "split-window", "-h", "-t", control_session, "-c", worktree]
+        )
+        # Send a command to show which session this pane represents
+        subprocess.run(
+            [
+                "tmux",
+                "send-keys",
+                "-t",
+                control_session,
+                f"echo 'Session: {label} ({session})'",
+                "Enter",
+            ]
+        )
+
+    # Balance the panes for better layout
+    subprocess.run(["tmux", "select-layout", "-t", control_session, "tiled"])
+
+    # Now attach to the control session
+    os.execvp("tmux", ["tmux", "attach-session", "-t", control_session])
