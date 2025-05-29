@@ -12,4 +12,4 @@ dependencies = [
 package = true
 
 [project.scripts]
-par = "par:app"
+par = "par.cli:app"

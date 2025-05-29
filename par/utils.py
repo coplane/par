@@ -53,55 +53,28 @@ def run_cmd(
         raise typer.Exit(code=127)
 
 
-_git_repo_root_cache: Optional[Path] = None  # Keep this as is
-
-
 def get_git_repo_root() -> Path:
     """Gets the root directory of the current git repository."""
-    global _git_repo_root_cache
-    # Invalidate cache if CWD changed significantly (e.g., to a different repo)
-    # A simple check: if cached, verify it's still a git repo and points to the same path
-    if _git_repo_root_cache:
-        try:
-            current_root_check_cmd = run_cmd(
-                ["git", "rev-parse", "--show-toplevel"],
-                capture=True,
-                suppress_output=True,
-                cwd=Path.cwd(),
-            )
-            if Path(current_root_check_cmd.stdout.strip()) == _git_repo_root_cache:
-                return _git_repo_root_cache
-            else:  # Current CWD is in a different git repo or not a git repo
-                _git_repo_root_cache = None
-        except (
-            subprocess.CalledProcessError,
-            typer.Exit,
-        ):  # Not a git repo or other error
-            _git_repo_root_cache = None
-
-    if _git_repo_root_cache is None:
-        try:
-            # Always determine from current working directory for freshness
-            result = run_cmd(
-                ["git", "rev-parse", "--show-toplevel"],
-                capture=True,
-                suppress_output=True,
-                cwd=Path.cwd(),
-            )
-            _git_repo_root_cache = Path(result.stdout.strip())
-        except (subprocess.CalledProcessError, typer.Exit):
-            typer.secho(
-                "Error: Not inside a git repository, or 'git' command failed.",
-                fg=typer.colors.RED,
-                err=True,
-            )
-            typer.secho(
-                "Please navigate to a git repository to use 'par' commands that require repository context.",
-                fg=typer.colors.RED,
-                err=True,
-            )
-            raise typer.Exit(code=1)
-    return _git_repo_root_cache
+    try:
+        result = run_cmd(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture=True,
+            suppress_output=True,
+            cwd=Path.cwd(),
+        )
+        return Path(result.stdout.strip())
+    except (subprocess.CalledProcessError, typer.Exit):
+        typer.secho(
+            "Error: Not inside a git repository, or 'git' command failed.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        typer.secho(
+            "Please navigate to a git repository to use 'par' commands that require repository context.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
 
 def get_repo_id(repo_root: Path) -> str:  # New function

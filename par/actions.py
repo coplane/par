@@ -1,5 +1,7 @@
 # src/par/actions.py
 
+from pathlib import Path
+
 import typer
 
 from . import git, tmux, utils  # Use git and tmux to refer to our modules
@@ -54,11 +56,13 @@ def start_new_session(label: str):
 
 
 def remove_session_action(label: str):
+    print("remove_session_action", label)
     repo_root = (
         utils.get_git_repo_root()
     )  # Get current repo context for stale artifact paths
     manager = SessionManager()
     session_data = manager.get_session(label)  # Scoped to current repo
+    print(session_data)
 
     if not session_data:
         typer.secho(
@@ -84,6 +88,21 @@ def remove_session_action(label: str):
         # No need to call manager.remove_session again if it wasn't found in the first place.
         typer.secho(f"Cleanup attempt for '{label}' finished.", fg=typer.colors.CYAN)
         return
+
+    worktree_path = Path(session_data["worktree_path"])
+    tmux_session_name = session_data["tmux_session_name"]
+    branch_name = session_data["branch_name"]
+
+    tmux.kill_session(tmux_session_name)
+    git.remove_worktree(worktree_path)
+    git.delete_branch(branch_name)
+
+    manager.remove_session(label)
+    typer.secho(
+        f"Successfully removed session '{label}'.",
+        fg=typer.colors.BRIGHT_GREEN,
+        bold=True,
+    )
 
 
 def remove_all_sessions_action():
@@ -190,14 +209,13 @@ def open_session_action(label: str):
     tmux_session_name = session_data["tmux_session_name"]
     if not tmux.session_exists(tmux_session_name):
         typer.secho(
-            f"Error: tmux session '{tmux_session_name}' for label '{label}' does not exist. It might have been killed manually.",
+            f"Error: tmux session '{tmux_session_name}' for label '{label}' does not exist. Recreating...",
             fg=typer.colors.RED,
             err=True,
         )
-        typer.echo(
-            "You might need to remove and recreate this par session: `par rm {label}` then `par start {label}`"
+        tmux.create_session(
+            session_data["tmux_session_name"], session_data["worktree_path"]
         )
-        raise typer.Exit(1)
 
     tmux.open_session_in_client(tmux_session_name)
 
@@ -212,9 +230,11 @@ def open_control_center_action():
             active_sessions_data.append(s_data)
         else:
             typer.secho(
-                f"Warning: Tmux session for label '{s_data['label']}' ({s_data['tmux_session_name']}) not found. Skipping for control center.",
+                f"Warning: Tmux session for label '{s_data['label']}' ({s_data['tmux_session_name']}) not found. Recreating...",
                 fg=typer.colors.YELLOW,
             )
+            tmux.create_session(s_data["tmux_session_name"], s_data["worktree_path"])
+            active_sessions_data.append(s_data)
 
     if not active_sessions_data:
         typer.secho(

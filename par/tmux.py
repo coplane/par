@@ -62,8 +62,7 @@ def send_keys(session_name: str, command: str, pane: str = "0"):
     check_tmux_env()
     target = f"{session_name}:{pane}"
     # Escape single quotes in the command for tmux send-keys
-    escaped_command = command.replace("'", "'\\''")
-    cmd = ["tmux", "send-keys", "-t", target, f"'{escaped_command}'", "Enter"]
+    cmd = ["tmux", "send-keys", "-t", target, command, "Enter"]
     try:
         run_cmd(cmd)
         typer.secho(
@@ -131,9 +130,9 @@ def open_session_in_client(session_name: str):
 def open_all_sessions_in_control_center(sessions_data: List[dict]):
     """Opens all sessions in a new tmux window with tiled panes."""
     check_tmux_env()
-    if not os.getenv("TMUX"):
+    if os.getenv("TMUX"):
         typer.secho(
-            "Error: Control center can only be opened from within a running tmux session.",
+            "Error: Control center can only be opened from outside a running tmux session.",
             fg=typer.colors.RED,
             err=True,
         )
@@ -142,60 +141,59 @@ def open_all_sessions_in_control_center(sessions_data: List[dict]):
         typer.secho("No sessions to open in control center.", fg=typer.colors.YELLOW)
         return
 
+    # Get repo root and create control center session name
+    from .utils import get_git_repo_root, get_tmux_session_name
+
+    repo_root = get_git_repo_root()
+    cc_session_name = get_tmux_session_name(repo_root, "cc")
+
+    # Check if session already exists
+    if session_exists(cc_session_name):
+        typer.secho(
+            f"Control center session '{cc_session_name}' already exists, attaching to it.",
+            fg=typer.colors.CYAN,
+        )
+        open_session_in_client(cc_session_name)
+        return
+
+    # Create new control center session
     first_session = sessions_data[0]
-    cc_window_name = "par-cc"
+    create_session(cc_session_name, Path(first_session["worktree_path"]))
 
-    # Ensure no window with this name exists or choose a new one
-    existing_windows_raw = run_cmd(
-        ["tmux", "list-windows", "-F", "#{window_name}"], capture=True
-    ).stdout.strip()
-    existing_windows = existing_windows_raw.split("\n") if existing_windows_raw else []
-
-    i = 0
-    final_cc_window_name = cc_window_name
-    while final_cc_window_name in existing_windows:
-        i += 1
-        final_cc_window_name = f"{cc_window_name}-{i}"
-
-    # Create the first pane / new window
-    cmd_attach_first = f"tmux attach-session -t {first_session['tmux_session_name']}"
-    run_cmd(
-        [
-            "tmux",
-            "new-window",
-            "-n",
-            final_cc_window_name,
-            "-c",
-            str(first_session["worktree_path"]),
-            cmd_attach_first,
-        ]
+    # Set up first pane with command to attach to first session
+    cmd_attach_first = (
+        f"TMUX= tmux attach-session -t {first_session['tmux_session_name']}"
     )
-
-    # Current window and pane target for splits
-    # The new window automatically becomes the current one.
-    # target_pane = f"{final_cc_window_name}.0" # First pane is 0
+    send_keys(cc_session_name, cmd_attach_first)
 
     # Split for other sessions
     for session_data in sessions_data[1:]:
-        cmd_attach_other = f"tmux attach-session -t {session_data['tmux_session_name']}"
-        # Split vertically by default. User can rearrange.
-        # -h for horizontal, -v for vertical split relative to current pane
+        cmd_attach_other = (
+            f"TMUX= tmux attach-session -t {session_data['tmux_session_name']}"
+        )
+        # Split horizontally (-h) and set working directory
         run_cmd(
             [
                 "tmux",
                 "split-window",
                 "-h",
+                "-t",
+                cc_session_name,
                 "-c",
                 str(session_data["worktree_path"]),
-                cmd_attach_other,
             ]
         )
-        run_cmd(
-            ["tmux", "select-layout", "tiled"]
-        )  # Re-tile after each split to keep it balanced
+        send_keys(cc_session_name, cmd_attach_other)
+        # Re-tile after each split to keep it balanced
+        run_cmd(["tmux", "select-layout", "-t", cc_session_name, "tiled"])
 
-    run_cmd(["tmux", "select-layout", "tiled"])  # Final tile
+    # Final tile layout and attach to the control center session
+    run_cmd(["tmux", "select-layout", "-t", cc_session_name, "tiled"])
+
     typer.secho(
-        f"Control center opened in tmux window '{final_cc_window_name}'.",
+        f"Control center session '{cc_session_name}' created with {len(sessions_data)} panes.",
         fg=typer.colors.GREEN,
     )
+
+    # Attach to the control center session
+    open_session_in_client(cc_session_name)
