@@ -84,6 +84,34 @@ This creates:
 - Git branch named `my-feature`
 - tmux session named `par-<repo>-<hash>-my-feature`
 
+### Checking Out Existing Branches and PRs
+
+Work with existing branches or review PRs without creating new branches:
+
+```bash
+# Checkout existing branch
+par checkout existing-branch
+
+# Checkout PR by number
+par checkout pr/123
+
+# Checkout PR by URL
+par checkout https://github.com/owner/repo/pull/456
+
+# Checkout remote branch from fork
+par checkout alice:feature-branch
+
+# Checkout with custom session label
+par checkout develop --label dev-work
+```
+
+**Supported formats:**
+- `branch-name` - Local or origin branch
+- `pr/123` - GitHub PR by number
+- `https://github.com/owner/repo/pull/123` - GitHub PR by URL
+- `username:branch` - Remote branch from fork
+- `remote/branch` - Branch from specific remote
+
 ### Managing Workspaces
 
 **List all workspaces:**
@@ -101,6 +129,8 @@ par open my-feature
 par rm my-feature      # Remove specific workspace
 par rm all             # Remove all workspaces (with confirmation)
 ```
+
+> **Note**: When removing checkout sessions, `par` only removes the worktree and tmux session. It does not delete the original branch since it wasn't created by `par`.
 
 ### Remote Command Execution
 

@@ -1,5 +1,6 @@
 # src/par/cli.py
 import typer
+from typing import Optional
 from typing_extensions import Annotated
 
 from . import core
@@ -94,6 +95,29 @@ def rm(
         core.remove_all_sessions()
     else:
         core.remove_session(target)
+
+
+@app.command()
+def checkout(
+    target: Annotated[
+        str,
+        typer.Argument(
+            help="Branch name, PR number (pr/123), PR URL, or remote branch (user:branch)"
+        ),
+    ],
+    label: Annotated[
+        Optional[str],
+        typer.Option(
+            "--label", "-l",
+            help="Custom label for the session (defaults to branch name)"
+        ),
+    ] = None,
+):
+    """
+    Checkout an existing branch or PR into a new par session.
+    Creates a worktree from existing branch/PR without creating a new branch.
+    """
+    core.checkout_session(target, label)
 
 
 @app.command()

@@ -4,13 +4,13 @@ import datetime
 import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import operations, utils
+from . import checkout, operations, utils
 
 
 # State management - simplified from SessionManager class
@@ -122,7 +122,10 @@ def remove_session(label: str):
     # Clean up resources
     operations.kill_tmux_session(session_data["tmux_session_name"])
     operations.remove_worktree(Path(session_data["worktree_path"]))
-    operations.delete_branch(session_data["branch_name"])
+    
+    # Only delete branch if it was created by par (not checkout)
+    if not session_data.get("is_checkout", False):
+        operations.delete_branch(session_data["branch_name"])
 
     # Remove physical directory if it exists and is managed by par
     worktree_path = Path(session_data["worktree_path"])
@@ -247,6 +250,63 @@ def open_session(label: str):
         )
 
     operations.open_tmux_session(session_name)
+
+
+def checkout_session(target: str, custom_label: Optional[str] = None):
+    """Checkout existing branch or PR into new session."""
+    sessions = _get_repo_sessions()
+    
+    try:
+        # Parse target to determine branch name and checkout strategy
+        branch_name, strategy = checkout.parse_checkout_target(target)
+    except ValueError as e:
+        typer.secho(f"Error: {e}", fg="red", err=True)
+        raise typer.Exit(1)
+    
+    # Generate label (custom or derived from branch name)
+    label = custom_label or branch_name
+    
+    if label in sessions:
+        typer.secho(f"Error: Session '{label}' already exists.", fg="red", err=True)
+        raise typer.Exit(1)
+
+    repo_root = utils.get_git_repo_root()
+    worktree_path = utils.get_worktree_path(repo_root, label)
+    session_name = utils.get_tmux_session_name(repo_root, label)
+
+    # Check for conflicts
+    if worktree_path.exists():
+        typer.secho(
+            f"Error: Worktree path '{worktree_path}' exists.", fg="red", err=True
+        )
+        raise typer.Exit(1)
+
+    if operations.tmux_session_exists(session_name):
+        typer.secho(f"Error: tmux session '{session_name}' exists.", fg="red", err=True)
+        raise typer.Exit(1)
+
+    # Create worktree from existing branch (no new branch creation)
+    operations.checkout_worktree(branch_name, worktree_path, strategy)
+    operations.create_tmux_session(session_name, worktree_path)
+
+    # Update state
+    sessions[label] = {
+        "worktree_path": str(worktree_path),
+        "tmux_session_name": session_name,
+        "branch_name": branch_name,
+        "created_at": datetime.datetime.utcnow().isoformat(),
+        "checkout_target": target,  # Remember original target
+        "is_checkout": True,  # Mark as checkout vs start
+    }
+    _update_repo_sessions(sessions)
+
+    typer.secho(
+        f"Successfully checked out '{target}' as session '{label}'.", fg="bright_green", bold=True
+    )
+    typer.echo(f"  Worktree: {worktree_path}")
+    typer.echo(f"  Branch: {branch_name}")
+    typer.echo(f"  Session: {session_name}")
+    typer.echo(f"To open: par open {label}")
 
 
 def open_control_center():

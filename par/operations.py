@@ -8,6 +8,7 @@ from typing import List, Optional
 import typer
 
 from .utils import get_git_repo_root, run_cmd
+from .checkout import CheckoutStrategy
 
 
 # Tmux utilities
@@ -49,6 +50,30 @@ def remove_worktree(worktree_path: Path):
     except Exception:
         # Often fails if path doesn't exist - that's OK during cleanup
         pass
+
+
+def checkout_worktree(branch_name: str, worktree_path: Path, strategy: CheckoutStrategy):
+    """Create worktree from existing branch."""
+    repo_root = get_git_repo_root()
+    
+    # Fetch from remote if needed
+    if strategy.fetch_remote:
+        try:
+            typer.secho(f"Fetching from remote '{strategy.remote}'...", fg="cyan")
+            run_cmd(["git", "fetch", strategy.remote], cwd=repo_root, suppress_output=True)
+        except Exception as e:
+            typer.secho(f"Warning: Could not fetch from '{strategy.remote}': {e}", fg="yellow")
+            # Continue anyway - the branch might already exist locally
+    
+    # Create worktree from existing ref
+    cmd = ["git", "worktree", "add", str(worktree_path), strategy.ref]
+    
+    try:
+        run_cmd(cmd, cwd=repo_root)
+        typer.secho(f"Checked out '{strategy.ref}' to {worktree_path}", fg="green")
+    except Exception as e:
+        typer.secho(f"Failed to checkout '{strategy.ref}': {e}", fg="red", err=True)
+        raise typer.Exit(1)
 
 
 def delete_branch(branch_name: str):
