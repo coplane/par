@@ -8,6 +8,7 @@ from typing import List, Optional
 import typer
 
 from .utils import get_git_repo_root, run_cmd
+from .checkout import CheckoutStrategy
 
 
 # Tmux utilities
@@ -49,6 +50,59 @@ def remove_worktree(worktree_path: Path):
     except Exception:
         # Often fails if path doesn't exist - that's OK during cleanup
         pass
+
+
+def checkout_worktree(branch_name: str, worktree_path: Path, strategy: CheckoutStrategy):
+    """Create worktree from existing branch."""
+    repo_root = get_git_repo_root()
+    
+    # Handle PR fetching specially
+    if strategy.is_pr:
+        try:
+            # Extract PR number from ref like "origin/pull/123/head"
+            pr_number = strategy.ref.split("/")[2]
+            typer.secho(f"Fetching PR #{pr_number}...", fg="cyan")
+            
+            # Fetch the specific PR ref
+            fetch_cmd = [
+                "git", "fetch", strategy.remote, 
+                f"pull/{pr_number}/head"
+            ]
+            run_cmd(fetch_cmd, cwd=repo_root, suppress_output=True)
+            
+            # Create worktree directly from FETCH_HEAD (what we just fetched)
+            cmd = ["git", "worktree", "add", str(worktree_path), "FETCH_HEAD"]
+            
+        except Exception as e:
+            typer.secho(f"Failed to fetch PR #{pr_number}: {e}", fg="red", err=True)
+            typer.echo(f"Make sure PR #{pr_number} exists and is accessible.")
+            raise typer.Exit(1)
+    elif strategy.fetch_remote:
+        try:
+            typer.secho(f"Fetching from remote '{strategy.remote}'...", fg="cyan")
+            run_cmd(["git", "fetch", strategy.remote], cwd=repo_root, suppress_output=True)
+        except Exception as e:
+            typer.secho(f"Warning: Could not fetch from '{strategy.remote}': {e}", fg="yellow")
+            # Continue anyway - the branch might already exist locally
+        
+        # Create worktree from existing ref
+        cmd = ["git", "worktree", "add", str(worktree_path), strategy.ref]
+    else:
+        # Create worktree from existing ref
+        cmd = ["git", "worktree", "add", str(worktree_path), strategy.ref]
+    
+    try:
+        run_cmd(cmd, cwd=repo_root)
+        if strategy.is_pr:
+            typer.secho(f"Checked out PR #{pr_number} to {worktree_path}", fg="green")
+        else:
+            typer.secho(f"Checked out '{strategy.ref}' to {worktree_path}", fg="green")
+    except Exception as e:
+        if strategy.is_pr:
+            typer.secho(f"Failed to checkout PR #{pr_number}: {e}", fg="red", err=True)
+        else:
+            typer.secho(f"Failed to checkout '{strategy.ref}': {e}", fg="red", err=True)
+        raise typer.Exit(1)
 
 
 def delete_branch(branch_name: str):
