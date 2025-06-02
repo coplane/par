@@ -10,8 +10,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import checkout, operations, utils
-
+from . import initialization, checkout, operations, utils
 
 # State management - simplified from SessionManager class
 def _get_state_file() -> Path:
@@ -88,6 +87,11 @@ def start_session(label: str):
     # Create resources
     operations.create_worktree(label, worktree_path)
     operations.create_tmux_session(session_name, worktree_path)
+
+    # Run initialization if .par.yaml exists
+    config = initialization.load_par_config(repo_root)
+    if config:
+        initialization.run_initialization(config, session_name)
 
     # Update state
     sessions[label] = {

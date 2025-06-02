@@ -157,6 +157,36 @@ par control-center
 
 > **Note**: Must be run from outside tmux. Creates a new session and attaches to each workspace in its own pane.
 
+### Automatic Initialization with .par.yaml
+
+`par` can automatically run initialization commands when creating new worktrees. Simply add a `.par.yaml` file to your repository root:
+
+```yaml
+# .par.yaml
+initialization:
+  commands:
+    - name: "Install frontend dependencies"
+      command: "cd frontend && pnpm install"
+      
+    - name: "Setup environment file"
+      command: "cd frontend && cp .env.example .env"
+      condition: "file_exists:frontend/.env.example"
+      
+    - name: "Install backend dependencies"
+      command: "cd backend && uv sync"
+      condition: "directory_exists:backend"
+      
+    # Simple string commands are also supported
+    - "echo 'Workspace initialized!'"
+```
+
+**Supported condition types:**
+- `directory_exists:path` - Check if directory exists
+- `file_exists:path` - Check if file exists  
+- `env:VAR_NAME` - Check if environment variable is set
+
+When you run `par start my-feature`, these commands will automatically execute in the new worktree's tmux session.
+
 ## Advanced Usage
 
 ### Repository-Scoped Sessions

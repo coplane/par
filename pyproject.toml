@@ -6,6 +6,7 @@ authors = [ { name="Victor", email="vimota@gmail.com" } ]
 requires-python = ">=3.12"
 dependencies = [
     "typer",
+    "pyyaml",
 ]
 
 [tool.uv]
