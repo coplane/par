@@ -186,21 +186,37 @@ def open_control_center(sessions_data: List[dict]):
         open_tmux_session(cc_session_name)
         return
 
-    # Create new control center session in first workspace
+    # Create new control center session
     first_session = sessions_data[0]
     create_tmux_session(cc_session_name, Path(first_session["worktree_path"]))
 
-    # Add other workspaces as split panes
-    for session_data in sessions_data[1:]:
-        # Split the window horizontally (side-by-side panes) and set working directory
-        run_cmd([
-            "tmux", "split-window", "-h", 
-            "-t", cc_session_name,
-            "-c", str(session_data["worktree_path"])
-        ])
+    # Set up first pane
+    attach_cmd = f"TMUX= tmux attach-session -t {first_session['tmux_session_name']}"
+    send_tmux_keys(cc_session_name, attach_cmd)
 
-    # Apply even-horizontal layout for evenly distributed side-by-side panes
-    run_cmd(["tmux", "select-layout", "-t", cc_session_name, "even-horizontal"])
-    
+    # Add other sessions in split panes
+    for session_data in sessions_data[1:]:
+        attach_cmd = f"TMUX= tmux attach-session -t {session_data['tmux_session_name']}"
+
+        # Split horizontally and set working directory
+        run_cmd(
+            [
+                "tmux",
+                "split-window",
+                "-h",
+                "-t",
+                cc_session_name,
+                "-c",
+                str(session_data["worktree_path"]),
+            ]
+        )
+        send_tmux_keys(cc_session_name, attach_cmd)
+
+        # Re-tile after each split
+        run_cmd(["tmux", "select-layout", "-t", cc_session_name, "tiled"])
+
+    # Final layout and attach
+    run_cmd(["tmux", "select-layout", "-t", cc_session_name, "tiled"])
+
     typer.secho(f"Created control center with {len(sessions_data)} panes.", fg="green")
     open_tmux_session(cc_session_name)
