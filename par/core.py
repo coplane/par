@@ -109,7 +109,7 @@ def start_session(label: str, open_session: bool = False):
     typer.echo(f"  Worktree: {worktree_path}")
     typer.echo(f"  Branch: {label}")
     typer.echo(f"  Session: {session_name}")
-    
+
     if open_session:
         typer.echo("Opening session...")
         operations.open_tmux_session(session_name)
