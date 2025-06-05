@@ -1,6 +1,7 @@
 # src/par/cli.py
-import typer
 from typing import Optional
+
+import typer
 from typing_extensions import Annotated
 
 from . import core
@@ -108,8 +109,9 @@ def checkout(
     label: Annotated[
         Optional[str],
         typer.Option(
-            "--label", "-l",
-            help="Custom label for the session (defaults to branch name)"
+            "--label",
+            "-l",
+            help="Custom label for the session (defaults to branch name)",
         ),
     ] = None,
 ):

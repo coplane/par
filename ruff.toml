@@ -1,0 +1,5 @@
+[lint]
+# Extend default lint rules.
+# TODO: Enable "UP007", "UP045" to lint Typing.Optional/Union
+extend-select = ["I", "E", "PLC", "PLE"]
+ignore = ["E501"]
