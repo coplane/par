@@ -9,8 +9,20 @@ dependencies = [
     "pyyaml",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "pre-commit",
+]
+
 [tool.uv]
 package = true
+dev-dependencies = [
+    "pytest",
+    "ruff", 
+    "pre-commit",
+]
 
 [project.scripts]
 par = "par.cli:app"

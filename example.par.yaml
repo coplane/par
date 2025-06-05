@@ -1,0 +1,32 @@
+# Example .par.yaml configuration file
+# Place this file in your repository root to customize par initialization
+
+initialization:
+  commands:
+    # Example: Install frontend dependencies in the frontend/ directory
+    - name: "Install frontend dependencies"
+      command: "pnpm install"
+      working_directory: "frontend"
+
+    # Example: Setup environment file in frontend/ directory
+    - name: "Setup environment file"
+      command: "echo 'VITE_API_URL=http://localhost:3000' > .env"
+      working_directory: "frontend"
+
+    # Example: Install backend dependencies in the backend/ directory
+    - name: "Install backend dependencies"
+      command: "uv sync"
+      working_directory: "backend"
+    
+    # Example: Run a global command (no working_directory specified)
+    - name: "Show repository status"
+      command: "git status"
+
+    # Example: Command with condition
+    - name: "Build frontend if package.json exists"
+      command: "npm run build"
+      working_directory: "frontend"
+      condition: "file_exists:frontend/package.json"
+
+# Note: The working_directory is relative to the worktree root
+# Commands without working_directory run in the worktree root
