@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import typer
 import yaml
@@ -28,60 +28,92 @@ def load_par_config(repo_root: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
-def run_initialization(config: Dict[str, Any], session_name: str) -> None:
+def run_initialization(
+    config: Dict[str, Any], session_name: str, worktree_path: Path
+) -> None:
     """Run initialization commands from .par.yaml configuration."""
     initialization = config.get("initialization", {})
     commands = initialization.get("commands", [])
-    
+
     if not commands:
         return
 
     console = Console()
-    console.print(f"[cyan]Running initialization commands for session '{session_name}'...[/cyan]")
+    console.print(
+        f"[cyan]Running initialization commands for session '{session_name}'...[/cyan]"
+    )
 
     for i, command_config in enumerate(commands):
         if isinstance(command_config, str):
             # Simple string command
             command = command_config
             name = f"Command {i + 1}"
+            working_directory = None
         elif isinstance(command_config, dict):
-            # Structured command with name and optional condition
+            # Structured command with name, optional condition, and working_directory
             command = command_config.get("command")
             name = command_config.get("name", f"Command {i + 1}")
             condition = command_config.get("condition")
-            
+            working_directory = command_config.get("working_directory")
+
             if not command:
-                typer.secho(f"Warning: Skipping command {i + 1}: no 'command' specified", fg="yellow")
+                typer.secho(
+                    f"Warning: Skipping command {i + 1}: no 'command' specified",
+                    fg="yellow",
+                )
                 continue
-                
+
             # Check condition if specified
-            if condition and not _check_condition(condition):
-                console.print(f"[dim]Skipping '{name}': condition '{condition}' not met[/dim]")
+            if condition and not _check_condition(condition, worktree_path):
+                console.print(
+                    f"[dim]Skipping '{name}': condition '{condition}' not met[/dim]"
+                )
                 continue
         else:
-            typer.secho(f"Warning: Skipping invalid command config at index {i}", fg="yellow")
+            typer.secho(
+                f"Warning: Skipping invalid command config at index {i}", fg="yellow"
+            )
             continue
 
         console.print(f"[green]Running:[/green] {name}")
-        console.print(f"[dim]  Command: {command}[/dim]")
-        
+
+        # Handle working directory
+        if working_directory:
+            # Change to the specified directory before running command
+            full_command = f"cd {working_directory} && {command}"
+            console.print(f"[dim]  Working directory: {working_directory}[/dim]")
+            console.print(f"[dim]  Command: {command}[/dim]")
+        else:
+            full_command = command
+            console.print(f"[dim]  Command: {command}[/dim]")
+
         try:
-            operations.send_tmux_keys(session_name, command)
+            operations.send_tmux_keys(session_name, full_command)
         except Exception as e:
             typer.secho(f"Error running command '{name}': {e}", fg="red")
             # Continue with other commands even if one fails
 
-    console.print(f"[green]✅ Initialization complete for session '{session_name}'[/green]")
+    console.print(
+        f"[green]✅ Initialization complete for session '{session_name}'[/green]"
+    )
 
 
-def _check_condition(condition: str) -> bool:
+def _check_condition(condition: str, worktree_path: Path) -> bool:
     """Check if a condition is met. Returns True if condition passes."""
     if condition.startswith("directory_exists:"):
         directory = condition.split(":", 1)[1]
-        return Path(directory).is_dir()
+        # Make path relative to worktree if not absolute
+        path = Path(directory)
+        if not path.is_absolute():
+            path = worktree_path / directory
+        return path.is_dir()
     elif condition.startswith("file_exists:"):
         file_path = condition.split(":", 1)[1]
-        return Path(file_path).is_file()
+        # Make path relative to worktree if not absolute
+        path = Path(file_path)
+        if not path.is_absolute():
+            path = worktree_path / file_path
+        return path.is_file()
     elif condition.startswith("env:"):
         env_var = condition.split(":", 1)[1]
         return os.getenv(env_var) is not None
