@@ -4,7 +4,7 @@ import datetime
 import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 import typer
 from rich.console import Console
@@ -58,6 +58,11 @@ def _update_repo_sessions(sessions: Dict[str, Any]):
         state.pop(repo_key, None)  # Remove empty repo entries
 
     _save_state(state)
+
+
+def get_session_labels() -> List[str]:
+    """Return a sorted list of session labels for the current repository."""
+    return sorted(_get_repo_sessions().keys())
 
 
 # Session operations - simplified from actions.py

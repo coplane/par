@@ -1,6 +1,7 @@
 # src/par/cli.py
 import typer
 from typing import Optional
+from click.shell_completion import CompletionItem
 from typing_extensions import Annotated
 
 from . import core
@@ -10,6 +11,23 @@ app = typer.Typer(
     help="Manage parallel git worktrees and tmux sessions.",
     add_completion=False,
 )
+
+
+def _session_label_complete(
+    ctx: typer.Context, param: typer.CallbackParam, incomplete: str
+) -> list[CompletionItem]:
+    """Provide shell completions for existing session labels."""
+    labels = [l for l in core.get_session_labels() if l.startswith(incomplete)]
+    return [CompletionItem(label) for label in labels]
+
+
+def _target_complete(
+    ctx: typer.Context, param: typer.CallbackParam, incomplete: str
+) -> list[CompletionItem]:
+    """Completion for commands that take 'all' or a session label."""
+    options = ["all"] + core.get_session_labels()
+    matches = [o for o in options if o.startswith(incomplete)]
+    return [CompletionItem(m) for m in matches]
 
 
 def version_callback(value: bool):
@@ -58,7 +76,8 @@ def send(
     target: Annotated[
         str,
         typer.Argument(
-            help="The label of the session to send the command to, or 'all'."
+            help="The label of the session to send the command to, or 'all'.",
+            shell_complete=_target_complete,
         ),
     ],
     command_to_send: Annotated[
@@ -84,7 +103,11 @@ def list_sessions():
 @app.command()
 def rm(
     target: Annotated[
-        str, typer.Argument(help="The label of the session to remove, or 'all'.")
+        str,
+        typer.Argument(
+            help="The label of the session to remove, or 'all'.",
+            shell_complete=_target_complete,
+        )
     ],
 ):
     """
@@ -123,7 +146,11 @@ def checkout(
 @app.command()
 def open(
     label: Annotated[
-        str, typer.Argument(help="The label of the session to open/attach to.")
+        str,
+        typer.Argument(
+            help="The label of the session to open/attach to.",
+            shell_complete=_session_label_complete,
+        )
     ],
 ):
     """
