@@ -277,18 +277,33 @@ class HealthChecker:
 
 ## Integration with Existing Features
 
+### Critical Requirement: Initialization-First Server Startup
+
+**Servers MUST only start after initialization has completed.** This ensures:
+
+- Dependencies are installed before servers attempt to start
+- Environment files exist before servers read them  
+- Database migrations complete before API servers start
+- Build processes finish before development servers launch
+
 ### 1. Session Lifecycle Integration
 
 ```python
 def start_session(label: str, open_session: bool = False, auto_serve: bool = True):
-    """Enhanced session start with optional server auto-start"""
-    # ... existing session creation logic ...
+    """Enhanced session start with initialization-first server startup"""
+    # 1. Create worktree and tmux session
+    operations.create_worktree(label, worktree_path)
+    operations.create_tmux_session(session_name, worktree_path)
     
-    if auto_serve:
-        config = initialization.load_par_config(repo_root)
-        if config and "servers" in config:
+    # 2. Run initialization commands FIRST
+    config = initialization.load_par_config(repo_root)
+    if config:
+        initialization.run_initialization(config, session_name, worktree_path)
+        
+        # 3. ONLY start servers after initialization completes successfully
+        if auto_serve and "servers" in config:
             server_manager = ServerManager(session_name, worktree_path)
-            asyncio.run(server_manager.start_auto_servers())
+            asyncio.run(server_manager.start_auto_servers(config["servers"]))
     
 def remove_session(label: str):
     """Enhanced session removal with server cleanup"""
@@ -305,16 +320,25 @@ def remove_session(label: str):
 
 ```python
 def start_workspace_session(label: str, repos: Optional[List[str]] = None, open_session: bool = False, auto_serve: bool = True):
-    """Enhanced workspace start with server orchestration"""
+    """Enhanced workspace start with initialization-first server orchestration"""
+    # 1. Create worktrees and tmux session for all repos
     # ... existing workspace creation logic ...
     
+    # 2. Run initialization for each repository FIRST
+    for repo_data in repos_data:
+        repo_path = Path(repo_data["repo_path"])
+        worktree_path = Path(repo_data["worktree_path"])
+        config = initialization.load_par_config(repo_path)
+        if config:
+            initialization.run_initialization(config, session_name, worktree_path, workspace_mode=True)
+    
+    # 3. ONLY start servers after ALL initialization completes
     if auto_serve:
-        # Start servers for each repository
         for repo_data in repos_data:
             repo_config = initialization.load_par_config(Path(repo_data["repo_path"]))
             if repo_config and "servers" in repo_config:
                 server_manager = ServerManager(f"{session_name}-{repo_data['repo_name']}", Path(repo_data["worktree_path"]))
-                asyncio.run(server_manager.start_auto_servers())
+                asyncio.run(server_manager.start_auto_servers(repo_config["servers"]))
 ```
 
 ### 3. Control Center Enhancement
