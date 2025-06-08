@@ -31,10 +31,10 @@ par start bugfix-login    # Another isolated session
 par start experiment-ai   # Yet another session
 ```
 
-### 📋 **Session Management**
+### 📋 **Unified Development Context Management**
 ```bash
-par ls                    # List all active sessions
-par open feature-auth     # Switch to a specific session
+par ls                    # List all sessions AND workspaces in one view
+par open feature-auth     # Switch to any session or workspace
 par rm bugfix-login       # Clean up completed work
 ```
 
@@ -46,7 +46,7 @@ par send all "git status"                  # Check status across all sessions
 
 ### 🎛️ **Control Center**
 ```bash
-par control-center        # View all sessions in a tiled layout
+par control-center        # View all sessions AND workspaces in a tiled layout
 ```
 
 ### 🏢 **Multi-Repository Workspaces**
@@ -55,6 +55,22 @@ par workspace start feature-auth --repos frontend,backend
 par workspace code feature-auth     # Open in VSCode with multi-repo support
 par workspace open feature-auth     # Attach to unified tmux session
 ```
+
+## Unified Development Context System
+
+`par` provides a **unified interface** for managing both single-repository sessions and multi-repository workspaces. Whether you're working on a single feature branch or coordinating changes across multiple repositories, all your development contexts appear in one place.
+
+### Two Development Modes:
+- **Sessions**: Single-repo development with isolated branches (`par start`, `par checkout`)
+- **Workspaces**: Multi-repo development with synchronized branches (`par workspace start`)
+
+### Unified Commands:
+- `par ls` - See all your development contexts (sessions + workspaces) in one table
+- `par open <label>` - Switch to any session or workspace
+- `par control-center` - View all contexts in a tiled tmux layout
+- Tab completion works across both sessions and workspaces
+
+This eliminates the need to remember which type of development context you're working with - just use the label and `par` handles the rest!
 
 ## Installation
 
@@ -121,21 +137,35 @@ par checkout develop --label dev-work
 - `username:branch` - Remote branch from fork
 - `remote/branch` - Branch from specific remote
 
-### Managing Sessions
+### Managing Development Contexts
 
-**List all sessions:**
+**List all sessions and workspaces:**
 ```bash
 par ls
 ```
 
-**Open a session:**
+Shows both single-repo sessions and multi-repo workspaces in a unified table:
+
+```
+Par Development Contexts for coplane:
+
+┌────────────────┬───────────┬──────────────────┬──────────────┬─────────────────┬────────────┐
+│ Label          │ Type      │ Tmux Session     │ Branch       │ Other Repos     │ Created    │
+├────────────────┼───────────┼──────────────────┼──────────────┼─────────────────┼────────────┤
+│ feature-auth   │ Session   │ par-coplane-...  │ feature-auth │ -               │ 2025-06-07 │
+│ fullstack-auth │ Workspace │ par-ws-coplane.. │ fullstack-auth│ planar          │ 2025-06-05 │
+└────────────────┴───────────┴──────────────────┴──────────────┴─────────────────┴────────────┘
+```
+
+**Open any development context:**
 ```bash
-par open my-feature
+par open my-feature        # Opens single-repo session
+par open fullstack-auth    # Opens multi-repo workspace
 ```
 
 **Remove completed work:**
 ```bash
-par rm my-feature      # Remove specific session
+par rm my-feature      # Remove specific session/workspace
 par rm all             # Remove all sessions (with confirmation)
 ```
 
@@ -158,13 +188,15 @@ par send all "npm test"
 
 ### Control Center
 
-View all sessions simultaneously in a tiled tmux layout:
+View all development contexts simultaneously in a tiled tmux layout:
 
 ```bash
 par control-center
 ```
 
-> **Note**: Must be run from outside tmux. Creates a new session and attaches to each session in its own pane.
+Shows both single-repo sessions and multi-repo workspaces in separate panes, giving you a unified overview of all your active development work.
+
+> **Note**: Must be run from outside tmux. Creates a new session and attaches to each context in its own pane.
 
 ### Automatic Initialization with .par.yaml
 

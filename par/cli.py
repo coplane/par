@@ -13,10 +13,28 @@ app = typer.Typer(
 
 
 def get_session_labels() -> List[str]:
-    """Get list of session labels for autocomplete."""
+    """Get list of session and workspace labels for autocomplete."""
     try:
+        labels = []
+
+        # Add single-repo sessions
         sessions = core._get_repo_sessions()
-        return list(sessions.keys())
+        labels.extend(sessions.keys())
+
+        # Add workspaces that contain current repo
+        current_repo_root = core.utils.get_git_repo_root()
+        current_repo_name = current_repo_root.name
+        current_dir = current_repo_root.parent
+        workspace_sessions = workspace._get_workspace_sessions(current_dir)
+
+        for ws_label, ws_data in workspace_sessions.items():
+            # Check if this workspace contains the current repository
+            for repo_data in ws_data.get("repos", []):
+                if repo_data["repo_name"] == current_repo_name:
+                    labels.append(ws_label)
+                    break
+
+        return labels
     except Exception:
         return []
 
@@ -69,10 +87,9 @@ def start(
 
 
 def get_session_labels_with_all() -> List[str]:
-    """Get list of session labels plus 'all' for autocomplete."""
+    """Get list of session and workspace labels plus 'all' for autocomplete."""
     try:
-        sessions = core._get_repo_sessions()
-        labels = list(sessions.keys())
+        labels = get_session_labels()  # Reuse the unified function
         labels.append("all")
         return labels
     except Exception:
