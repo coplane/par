@@ -387,7 +387,7 @@ par workspace open user-profiles
 # 4. Work across repositories from single terminal
 cd frontend/    # Switch to frontend worktree
 cd ../backend/  # Switch to backend worktree
-claude-code .   # Run Claude Code from workspace root to see all repos
+claude          # Run Claude from workspace root to see all repos
 
 # 5. Clean up when feature is complete
 par workspace rm user-profiles
