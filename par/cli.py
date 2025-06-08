@@ -4,7 +4,7 @@ from typing import List, Optional
 import typer
 from typing_extensions import Annotated
 
-from . import core
+from . import core, workspace
 
 app = typer.Typer(
     name="par",
@@ -211,7 +211,7 @@ def workspace_start(
     if repos:
         repo_list = [r.strip() for r in repos.split(",") if r.strip()]
 
-    core.start_workspace_session(label, repo_list, open_session)
+    workspace.start_workspace_session(label, repo_list, open_session)
 
 
 @workspace_app.command("ls")
@@ -219,7 +219,7 @@ def workspace_list():
     """
     List all workspace sessions for the current directory.
     """
-    core.list_workspace_sessions()
+    workspace.list_workspace_sessions()
 
 
 @workspace_app.command("open")
@@ -229,7 +229,7 @@ def workspace_open(
     """
     Open/attach to a specific workspace session.
     """
-    core.open_workspace_session(label)
+    workspace.open_workspace_session(label)
 
 
 @workspace_app.command("code")
@@ -241,7 +241,7 @@ def workspace_code(
     """
     Open a workspace in VSCode with all repositories.
     """
-    core.open_workspace_in_ide(label, "code")
+    workspace.open_workspace_in_ide(label, "code")
 
 
 @workspace_app.command("cursor")
@@ -253,7 +253,7 @@ def workspace_cursor(
     """
     Open a workspace in Cursor with all repositories.
     """
-    core.open_workspace_in_ide(label, "cursor")
+    workspace.open_workspace_in_ide(label, "cursor")
 
 
 @workspace_app.command("rm")
@@ -267,9 +267,9 @@ def workspace_remove(
     This removes all worktrees, branches, and the tmux session.
     """
     if target.lower() == "all":
-        core.remove_all_workspace_sessions()
+        workspace.remove_all_workspace_sessions()
     else:
-        core.remove_workspace_session(target)
+        workspace.remove_workspace_session(target)
 
 
 # This is for `python -m par`
