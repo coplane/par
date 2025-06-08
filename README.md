@@ -258,7 +258,7 @@ When you create a workspace, `par` automatically:
 
 1. **Detects repositories** in the current directory (or uses `--repos`)
 2. **Creates worktrees** for each repository with the same branch name
-3. **Creates tmux session** with multiple panes (one per repository)  
+3. **Creates tmux session** in the workspace root directory with access to all repositories
 4. **Generates IDE workspace files** for seamless editor integration
 
 **Example directory structure:**
@@ -270,8 +270,8 @@ my-fullstack-app/
 
 # After: par workspace start user-auth
 # Creates branches: user-auth in all three repos
-# Creates tmux session with 3 panes
-# Each pane starts in its respective worktree
+# Creates single tmux session in workspace root
+# Can access all repositories with: cd frontend/, cd backend/, cd docs/
 ```
 
 ### IDE Integration
@@ -381,9 +381,13 @@ par workspace start user-profiles --repos frontend,backend
 # 2. Open in IDE with proper multi-repo support
 par workspace code user-profiles
 
-# 3. Work across repositories - each has user-profiles branch
-# 4. Use tmux session for terminal work
+# 3. Open tmux session in workspace root
 par workspace open user-profiles
+
+# 4. Work across repositories from single terminal
+cd frontend/    # Switch to frontend worktree
+cd ../backend/  # Switch to backend worktree
+claude-code .   # Run Claude Code from workspace root to see all repos
 
 # 5. Clean up when feature is complete
 par workspace rm user-profiles
@@ -395,8 +399,9 @@ par workspace rm user-profiles
 par workspace start api-v2 --repos auth-service,user-service,gateway
 
 # All services get api-v2 branch
-# Single tmux session for monitoring all services
+# Single tmux session in workspace root
 # IDE workspace shows all services together
+# Navigate between services: cd auth-service/, cd user-service/, etc.
 ```
 
 ### Branch Creation

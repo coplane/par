@@ -254,7 +254,9 @@ def open_control_center(sessions_data: List[dict]):
     open_tmux_session(cc_session_name)
 
 
-def create_workspace_worktree(repo_path: Path, label: str, worktree_path: Path, base_branch: Optional[str] = None):
+def create_workspace_worktree(
+    repo_path: Path, label: str, worktree_path: Path, base_branch: Optional[str] = None
+):
     """Create a new git worktree and branch for a specific repo in workspace."""
     cmd = ["git", "worktree", "add", "-b", label, str(worktree_path)]
     if base_branch:
@@ -262,9 +264,16 @@ def create_workspace_worktree(repo_path: Path, label: str, worktree_path: Path, 
 
     try:
         run_cmd(cmd, cwd=repo_path)
-        typer.secho(f"Created worktree '{label}' at {worktree_path} for {repo_path.name}", fg="green")
+        typer.secho(
+            f"Created worktree '{label}' at {worktree_path} for {repo_path.name}",
+            fg="green",
+        )
     except Exception as e:
-        typer.secho(f"Failed to create worktree '{label}' for {repo_path.name}: {e}", fg="red", err=True)
+        typer.secho(
+            f"Failed to create worktree '{label}' for {repo_path.name}: {e}",
+            fg="red",
+            err=True,
+        )
         raise typer.Exit(1)
 
 
@@ -274,7 +283,9 @@ def remove_workspace_worktree(repo_path: Path, worktree_path: Path):
 
     try:
         run_cmd(cmd, cwd=repo_path, suppress_output=True)
-        typer.secho(f"Removed worktree at {worktree_path} for {repo_path.name}", fg="green")
+        typer.secho(
+            f"Removed worktree at {worktree_path} for {repo_path.name}", fg="green"
+        )
     except Exception:
         # Often fails if path doesn't exist - that's OK during cleanup
         pass
@@ -293,31 +304,20 @@ def delete_workspace_branch(repo_path: Path, branch_name: str):
 
 
 def create_workspace_tmux_session(session_name: str, repos_data: List[dict]):
-    """Create a workspace tmux session with multiple panes for repos."""
+    """Create a workspace tmux session in the workspace root directory."""
     _check_tmux()
-    
+
     if not repos_data:
         typer.secho("No repos provided for workspace session.", fg="red", err=True)
         raise typer.Exit(1)
-    
-    # Create session with first repo as main window
-    first_repo = repos_data[0]
-    create_tmux_session(session_name, Path(first_repo["worktree_path"]))
-    
-    # Add other repos as split panes
-    for i, repo_data in enumerate(repos_data[1:], 1):
-        # Split window vertically to create new pane
-        run_cmd([
-            "tmux", "split-window", "-h", 
-            "-t", session_name,
-            "-c", str(repo_data["worktree_path"])
-        ])
-        
-        # Wait a moment for pane to be created
-        import time
-        time.sleep(0.1)
-    
-    # Apply even-horizontal layout for consistent side-by-side panes
-    run_cmd(["tmux", "select-layout", "-t", session_name, "even-horizontal"])
-    
-    typer.secho(f"Created workspace session '{session_name}' with {len(repos_data)} repo panes.", fg="green")
+
+    # Get workspace root directory (parent of all repo worktrees)
+    first_worktree_path = Path(repos_data[0]["worktree_path"])
+    workspace_root = first_worktree_path.parent.parent
+
+    # Create session in workspace root directory
+    create_tmux_session(session_name, workspace_root)
+
+    typer.secho(
+        f"Created workspace session '{session_name}' in workspace root.", fg="green"
+    )
