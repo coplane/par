@@ -1,5 +1,5 @@
 # src/par/cli.py
-from typing import Optional
+from typing import List, Optional
 
 import typer
 from typing_extensions import Annotated
@@ -9,8 +9,16 @@ from . import core
 app = typer.Typer(
     name="par",
     help="Manage parallel git worktrees and tmux sessions.",
-    add_completion=False,
 )
+
+
+def get_session_labels() -> List[str]:
+    """Get list of session labels for autocomplete."""
+    try:
+        sessions = core._get_repo_sessions()
+        return list(sessions.keys())
+    except Exception:
+        return []
 
 
 def version_callback(value: bool):
@@ -60,12 +68,24 @@ def start(
     core.start_session(label, open_session=open_session)
 
 
+def get_session_labels_with_all() -> List[str]:
+    """Get list of session labels plus 'all' for autocomplete."""
+    try:
+        sessions = core._get_repo_sessions()
+        labels = list(sessions.keys())
+        labels.append("all")
+        return labels
+    except Exception:
+        return ["all"]
+
+
 @app.command()
 def send(
     target: Annotated[
         str,
         typer.Argument(
-            help="The label of the session to send the command to, or 'all'."
+            help="The label of the session to send the command to, or 'all'.",
+            autocompletion=get_session_labels_with_all,
         ),
     ],
     command_to_send: Annotated[
@@ -91,7 +111,11 @@ def list_sessions():
 @app.command()
 def rm(
     target: Annotated[
-        str, typer.Argument(help="The label of the session to remove, or 'all'.")
+        str,
+        typer.Argument(
+            help="The label of the session to remove, or 'all'.",
+            autocompletion=get_session_labels_with_all,
+        ),
     ],
 ):
     """
@@ -131,7 +155,11 @@ def checkout(
 @app.command()
 def open(
     label: Annotated[
-        str, typer.Argument(help="The label of the session to open/attach to.")
+        str,
+        typer.Argument(
+            help="The label of the session to open/attach to.",
+            autocompletion=get_session_labels,
+        ),
     ],
 ):
     """
