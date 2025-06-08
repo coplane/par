@@ -31,10 +31,10 @@ par start bugfix-login    # Another isolated session
 par start experiment-ai   # Yet another session
 ```
 
-### 📋 **Session Management**
+### 📋 **Unified Development Context Management**
 ```bash
-par ls                    # List all active sessions
-par open feature-auth     # Switch to a specific session
+par ls                    # List all sessions AND workspaces in one view
+par open feature-auth     # Switch to any session or workspace
 par rm bugfix-login       # Clean up completed work
 ```
 
@@ -46,7 +46,7 @@ par send all "git status"                  # Check status across all sessions
 
 ### 🎛️ **Control Center**
 ```bash
-par control-center        # View all sessions in a tiled layout
+par control-center        # View all sessions AND workspaces in a tiled layout
 ```
 
 ### 🏢 **Multi-Repository Workspaces**
@@ -55,6 +55,22 @@ par workspace start feature-auth --repos frontend,backend
 par workspace code feature-auth     # Open in VSCode with multi-repo support
 par workspace open feature-auth     # Attach to unified tmux session
 ```
+
+## Unified Development Context System
+
+`par` provides a **unified interface** for managing both single-repository sessions and multi-repository workspaces. Whether you're working on a single feature branch or coordinating changes across multiple repositories, all your development contexts appear in one place.
+
+### Two Development Modes:
+- **Sessions**: Single-repo development with isolated branches (`par start`, `par checkout`)
+- **Workspaces**: Multi-repo development with synchronized branches (`par workspace start`)
+
+### Unified Commands:
+- `par ls` - See all your development contexts (sessions + workspaces) in one table
+- `par open <label>` - Switch to any session or workspace
+- `par control-center` - View all contexts in a tiled tmux layout
+- Tab completion works across both sessions and workspaces
+
+This eliminates the need to remember which type of development context you're working with - just use the label and `par` handles the rest!
 
 ## Installation
 
@@ -121,21 +137,35 @@ par checkout develop --label dev-work
 - `username:branch` - Remote branch from fork
 - `remote/branch` - Branch from specific remote
 
-### Managing Sessions
+### Managing Development Contexts
 
-**List all sessions:**
+**List all sessions and workspaces:**
 ```bash
 par ls
 ```
 
-**Open a session:**
+Shows both single-repo sessions and multi-repo workspaces in a unified table:
+
+```
+Par Development Contexts for coplane:
+
+┌────────────────┬───────────┬──────────────────┬──────────────┬─────────────────┬────────────┐
+│ Label          │ Type      │ Tmux Session     │ Branch       │ Other Repos     │ Created    │
+├────────────────┼───────────┼──────────────────┼──────────────┼─────────────────┼────────────┤
+│ feature-auth   │ Session   │ par-coplane-...  │ feature-auth │ -               │ 2025-06-07 │
+│ fullstack-auth │ Workspace │ par-ws-coplane.. │ fullstack-auth│ planar          │ 2025-06-05 │
+└────────────────┴───────────┴──────────────────┴──────────────┴─────────────────┴────────────┘
+```
+
+**Open any development context:**
 ```bash
-par open my-feature
+par open my-feature        # Opens single-repo session
+par open fullstack-auth    # Opens multi-repo workspace
 ```
 
 **Remove completed work:**
 ```bash
-par rm my-feature      # Remove specific session
+par rm my-feature      # Remove specific session/workspace
 par rm all             # Remove all sessions (with confirmation)
 ```
 
@@ -158,13 +188,15 @@ par send all "npm test"
 
 ### Control Center
 
-View all sessions simultaneously in a tiled tmux layout:
+View all development contexts simultaneously in a tiled tmux layout:
 
 ```bash
 par control-center
 ```
 
-> **Note**: Must be run from outside tmux. Creates a new session and attaches to each session in its own pane.
+Shows both single-repo sessions and multi-repo workspaces in separate panes, giving you a unified overview of all your active development work.
+
+> **Note**: Must be run from outside tmux. Creates a new session and attaches to each context in its own pane.
 
 ### Automatic Initialization with .par.yaml
 
@@ -258,7 +290,7 @@ When you create a workspace, `par` automatically:
 
 1. **Detects repositories** in the current directory (or uses `--repos`)
 2. **Creates worktrees** for each repository with the same branch name
-3. **Creates tmux session** with multiple panes (one per repository)  
+3. **Creates tmux session** in the workspace root directory with access to all repositories
 4. **Generates IDE workspace files** for seamless editor integration
 
 **Example directory structure:**
@@ -270,8 +302,8 @@ my-fullstack-app/
 
 # After: par workspace start user-auth
 # Creates branches: user-auth in all three repos
-# Creates tmux session with 3 panes
-# Each pane starts in its respective worktree
+# Creates single tmux session in workspace root
+# Can access all repositories with: cd frontend/, cd backend/, cd docs/
 ```
 
 ### IDE Integration
@@ -381,9 +413,13 @@ par workspace start user-profiles --repos frontend,backend
 # 2. Open in IDE with proper multi-repo support
 par workspace code user-profiles
 
-# 3. Work across repositories - each has user-profiles branch
-# 4. Use tmux session for terminal work
+# 3. Open tmux session in workspace root
 par workspace open user-profiles
+
+# 4. Work across repositories from single terminal
+cd frontend/    # Switch to frontend worktree
+cd ../backend/  # Switch to backend worktree
+claude          # Run Claude from workspace root to see all repos
 
 # 5. Clean up when feature is complete
 par workspace rm user-profiles
@@ -395,8 +431,9 @@ par workspace rm user-profiles
 par workspace start api-v2 --repos auth-service,user-service,gateway
 
 # All services get api-v2 branch
-# Single tmux session for monitoring all services
+# Single tmux session in workspace root
 # IDE workspace shows all services together
+# Navigate between services: cd auth-service/, cd user-service/, etc.
 ```
 
 ### Branch Creation

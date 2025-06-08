@@ -29,7 +29,10 @@ def load_par_config(repo_root: Path) -> Optional[Dict[str, Any]]:
 
 
 def run_initialization(
-    config: Dict[str, Any], session_name: str, worktree_path: Path
+    config: Dict[str, Any],
+    session_name: str,
+    worktree_path: Path,
+    workspace_mode: bool = False,
 ) -> None:
     """Run initialization commands from .par.yaml configuration."""
     initialization = config.get("initialization", {})
@@ -79,12 +82,25 @@ def run_initialization(
 
         # Handle working directory
         if working_directory:
-            # Change to the specified directory before running command
-            full_command = f"cd {working_directory} && {command}"
-            console.print(f"[dim]  Working directory: {working_directory}[/dim]")
+            if workspace_mode:
+                # In workspace mode, we need to cd to the repo worktree first, then the working_directory
+                full_command = (
+                    f"cd {worktree_path} && cd {working_directory} && {command}"
+                )
+                console.print(f"[dim]  Repo: {worktree_path.name}[/dim]")
+                console.print(f"[dim]  Working directory: {working_directory}[/dim]")
+            else:
+                # In single repo mode, working_directory is relative to the worktree
+                full_command = f"cd {working_directory} && {command}"
+                console.print(f"[dim]  Working directory: {working_directory}[/dim]")
             console.print(f"[dim]  Command: {command}[/dim]")
         else:
-            full_command = command
+            if workspace_mode:
+                # In workspace mode, run command in the repo worktree
+                full_command = f"cd {worktree_path} && {command}"
+                console.print(f"[dim]  Repo: {worktree_path.name}[/dim]")
+            else:
+                full_command = command
             console.print(f"[dim]  Command: {command}[/dim]")
 
         try:
