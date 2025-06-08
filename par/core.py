@@ -356,7 +356,9 @@ def _load_workspace_state() -> Dict[str, Any]:
             content = f.read().strip()
             return json.loads(content) if content else {}
     except json.JSONDecodeError:
-        typer.secho("Warning: Workspace state file corrupted. Starting fresh.", fg="yellow")
+        typer.secho(
+            "Warning: Workspace state file corrupted. Starting fresh.", fg="yellow"
+        )
         return {}
 
 
@@ -389,15 +391,21 @@ def _update_workspace_sessions(workspace_root: Path, sessions: Dict[str, Any]):
     _save_workspace_state(state)
 
 
-def start_workspace_session(label: str, repos: Optional[List[str]] = None, open_session: bool = False):
+def start_workspace_session(
+    label: str, repos: Optional[List[str]] = None, open_session: bool = False
+):
     """Start a new workspace with multiple repositories."""
     current_dir = Path.cwd()
-    
+
     # Auto-detect repos if not specified
     if not repos:
         detected_repos = utils.detect_git_repos(current_dir)
         if not detected_repos:
-            typer.secho("Error: No git repositories found in current directory.", fg="red", err=True)
+            typer.secho(
+                "Error: No git repositories found in current directory.",
+                fg="red",
+                err=True,
+            )
             typer.echo("Use --repos to specify repositories explicitly.")
             raise typer.Exit(1)
         repo_names = [repo.name for repo in detected_repos]
@@ -408,10 +416,14 @@ def start_workspace_session(label: str, repos: Optional[List[str]] = None, open_
         for repo_name in repos:
             repo_path = current_dir / repo_name
             if not repo_path.exists():
-                typer.secho(f"Error: Repository '{repo_name}' not found.", fg="red", err=True)
+                typer.secho(
+                    f"Error: Repository '{repo_name}' not found.", fg="red", err=True
+                )
                 raise typer.Exit(1)
             if not (repo_path / ".git").exists():
-                typer.secho(f"Error: '{repo_name}' is not a git repository.", fg="red", err=True)
+                typer.secho(
+                    f"Error: '{repo_name}' is not a git repository.", fg="red", err=True
+                )
                 raise typer.Exit(1)
             repo_paths.append(repo_path)
 
@@ -431,22 +443,28 @@ def start_workspace_session(label: str, repos: Optional[List[str]] = None, open_
     # Create worktrees for each repo
     repos_data = []
     for repo_path, repo_name in zip(repo_paths, repo_names):
-        worktree_path = utils.get_workspace_worktree_path(current_dir, label, repo_name, label)
-        
+        worktree_path = utils.get_workspace_worktree_path(
+            current_dir, label, repo_name, label
+        )
+
         # Check for conflicts
         if worktree_path.exists():
-            typer.secho(f"Error: Worktree path '{worktree_path}' exists.", fg="red", err=True)
+            typer.secho(
+                f"Error: Worktree path '{worktree_path}' exists.", fg="red", err=True
+            )
             raise typer.Exit(1)
 
         # Create resources
         operations.create_workspace_worktree(repo_path, label, worktree_path)
-        
-        repos_data.append({
-            "repo_name": repo_name,
-            "repo_path": str(repo_path),
-            "worktree_path": str(worktree_path),
-            "branch_name": label,
-        })
+
+        repos_data.append(
+            {
+                "repo_name": repo_name,
+                "repo_path": str(repo_path),
+                "worktree_path": str(worktree_path),
+                "branch_name": label,
+            }
+        )
 
     # Create tmux session with multiple panes
     operations.create_workspace_tmux_session(session_name, repos_data)
@@ -465,11 +483,15 @@ def start_workspace_session(label: str, repos: Optional[List[str]] = None, open_
     }
     _update_workspace_sessions(current_dir, workspace_sessions)
 
-    typer.secho(f"Successfully started workspace '{label}' with {len(repos_data)} repositories.", fg="bright_green", bold=True)
+    typer.secho(
+        f"Successfully started workspace '{label}' with {len(repos_data)} repositories.",
+        fg="bright_green",
+        bold=True,
+    )
     for repo_data in repos_data:
         typer.echo(f"  {repo_data['repo_name']}: {repo_data['worktree_path']}")
     typer.echo(f"  Session: {session_name}")
-    
+
     if open_session:
         typer.echo("Opening workspace...")
         operations.open_tmux_session(session_name)
@@ -497,7 +519,7 @@ def list_workspace_sessions():
         session_active = (
             "✅" if operations.tmux_session_exists(data["session_name"]) else "❌"
         )
-        
+
         repo_names = [repo["repo_name"] for repo in data["repos"]]
         repo_list = ", ".join(repo_names)
 
@@ -555,7 +577,10 @@ def remove_workspace_session(label: str):
             try:
                 shutil.rmtree(worktree_path)
             except OSError as e:
-                typer.secho(f"Warning: Could not remove directory {worktree_path}: {e}", fg="yellow")
+                typer.secho(
+                    f"Warning: Could not remove directory {worktree_path}: {e}",
+                    fg="yellow",
+                )
 
     # Kill tmux session
     operations.kill_tmux_session(workspace_data["session_name"])
@@ -564,7 +589,9 @@ def remove_workspace_session(label: str):
     del workspace_sessions[label]
     _update_workspace_sessions(current_dir, workspace_sessions)
 
-    typer.secho(f"Successfully removed workspace '{label}'.", fg="bright_green", bold=True)
+    typer.secho(
+        f"Successfully removed workspace '{label}'.", fg="bright_green", bold=True
+    )
 
 
 def remove_all_workspace_sessions():
@@ -576,10 +603,48 @@ def remove_all_workspace_sessions():
         typer.secho("No workspace sessions to remove.", fg="yellow")
         return
 
-    typer.confirm(f"Remove all {len(workspace_sessions)} workspace sessions?", abort=True)
+    typer.confirm(
+        f"Remove all {len(workspace_sessions)} workspace sessions?", abort=True
+    )
 
     for label in list(workspace_sessions.keys()):
         typer.echo(f"Removing workspace '{label}'...")
         remove_workspace_session(label)
 
     typer.secho("All workspace sessions removed.", fg="bright_green", bold=True)
+
+
+def open_workspace_in_ide(label: str, ide: str):
+    """Open a workspace in the specified IDE."""
+    current_dir = Path.cwd()
+    workspace_sessions = _get_workspace_sessions(current_dir)
+    workspace_data = workspace_sessions.get(label)
+
+    if not workspace_data:
+        typer.secho(f"Error: Workspace '{label}' not found.", fg="red", err=True)
+        raise typer.Exit(1)
+
+    # Generate workspace file
+    workspace_config = utils.generate_vscode_workspace(label, workspace_data["repos"])
+    workspace_file_path = utils.get_workspace_file_path(current_dir, label)
+
+    # Write workspace file
+    with open(workspace_file_path, "w") as f:
+        json.dump(workspace_config, f, indent=2)
+
+    # Open in IDE
+    try:
+        if ide == "code":
+            utils.run_cmd(["code", str(workspace_file_path)], suppress_output=True)
+            typer.secho(f"Opened workspace '{label}' in VSCode", fg="green")
+        elif ide == "cursor":
+            utils.run_cmd(["cursor", str(workspace_file_path)], suppress_output=True)
+            typer.secho(f"Opened workspace '{label}' in Cursor", fg="green")
+        else:
+            typer.secho(f"Error: Unknown IDE '{ide}'", fg="red", err=True)
+            raise typer.Exit(1)
+    except Exception as e:
+        typer.secho(f"Error opening {ide}: {e}", fg="red", err=True)
+        typer.echo(f"Workspace file created at: {workspace_file_path}")
+        typer.echo(f"You can manually open it with: {ide} {workspace_file_path}")
+        raise typer.Exit(1)

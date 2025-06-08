@@ -1,5 +1,5 @@
 # src/par/cli.py
-from typing import List, Optional
+from typing import Optional
 
 import typer
 from typing_extensions import Annotated
@@ -162,24 +162,28 @@ def workspace_start(
         typer.Argument(help="A unique label for the workspace"),
     ],
     repos: Annotated[
-        Optional[List[str]],
+        Optional[str],
         typer.Option(
-            "--repos", "-r",
-            help="List of repository names (auto-detects if not specified)"
+            "--repos",
+            "-r",
+            help="Comma-separated repository names (auto-detects if not specified)",
         ),
     ] = None,
     open_session: Annotated[
         bool,
-        typer.Option(
-            "--open", help="Automatically open the workspace after creation"
-        ),
+        typer.Option("--open", help="Automatically open the workspace after creation"),
     ] = False,
 ):
     """
     Start a new multi-repository workspace.
     Creates worktrees and branches for multiple repos in a single tmux session.
     """
-    core.start_workspace_session(label, repos, open_session)
+    # Parse comma-separated repos
+    repo_list = None
+    if repos:
+        repo_list = [r.strip() for r in repos.split(",") if r.strip()]
+
+    core.start_workspace_session(label, repo_list, open_session)
 
 
 @workspace_app.command("ls")
@@ -192,14 +196,36 @@ def workspace_list():
 
 @workspace_app.command("open")
 def workspace_open(
-    label: Annotated[
-        str, typer.Argument(help="The label of the workspace to open")
-    ],
+    label: Annotated[str, typer.Argument(help="The label of the workspace to open")],
 ):
     """
     Open/attach to a specific workspace session.
     """
     core.open_workspace_session(label)
+
+
+@workspace_app.command("code")
+def workspace_code(
+    label: Annotated[
+        str, typer.Argument(help="The label of the workspace to open in VSCode")
+    ],
+):
+    """
+    Open a workspace in VSCode with all repositories.
+    """
+    core.open_workspace_in_ide(label, "code")
+
+
+@workspace_app.command("cursor")
+def workspace_cursor(
+    label: Annotated[
+        str, typer.Argument(help="The label of the workspace to open in Cursor")
+    ],
+):
+    """
+    Open a workspace in Cursor with all repositories.
+    """
+    core.open_workspace_in_ide(label, "cursor")
 
 
 @workspace_app.command("rm")
