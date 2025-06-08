@@ -469,10 +469,24 @@ def start_workspace_session(
     # Create tmux session with multiple panes
     operations.create_workspace_tmux_session(session_name, repos_data)
 
-    # Run initialization if .par.yaml exists in workspace root
-    config = initialization.load_par_config(current_dir)
-    if config:
-        initialization.run_initialization(config, session_name, current_dir)
+    # Run initialization for each repository if .par.yaml exists
+    has_initialization = False
+    for repo_data in repos_data:
+        repo_path = Path(repo_data["repo_path"])
+        worktree_path = Path(repo_data["worktree_path"])
+        config = initialization.load_par_config(repo_path)
+        if config:
+            initialization.run_initialization(
+                config, session_name, worktree_path, workspace_mode=True
+            )
+            has_initialization = True
+
+    # Return to workspace root after initialization
+    if has_initialization:
+        # Calculate the actual workspace root directory (parent of all repo worktrees)
+        first_worktree_path = Path(repos_data[0]["worktree_path"])
+        workspace_root = first_worktree_path.parent.parent
+        operations.send_tmux_keys(session_name, f"cd {workspace_root}")
 
     # Update state
     workspace_sessions[label] = {
