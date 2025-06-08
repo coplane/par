@@ -1,5 +1,5 @@
 # src/par/cli.py
-from typing import Optional
+from typing import List, Optional
 
 import typer
 from typing_extensions import Annotated
@@ -148,6 +148,74 @@ def control_center():
     Must be run from within an existing tmux session.
     """
     core.open_control_center()
+
+
+# Workspace commands
+workspace_app = typer.Typer(help="Manage multi-repository workspaces")
+app.add_typer(workspace_app, name="workspace")
+
+
+@workspace_app.command("start")
+def workspace_start(
+    label: Annotated[
+        str,
+        typer.Argument(help="A unique label for the workspace"),
+    ],
+    repos: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            "--repos", "-r",
+            help="List of repository names (auto-detects if not specified)"
+        ),
+    ] = None,
+    open_session: Annotated[
+        bool,
+        typer.Option(
+            "--open", help="Automatically open the workspace after creation"
+        ),
+    ] = False,
+):
+    """
+    Start a new multi-repository workspace.
+    Creates worktrees and branches for multiple repos in a single tmux session.
+    """
+    core.start_workspace_session(label, repos, open_session)
+
+
+@workspace_app.command("ls")
+def workspace_list():
+    """
+    List all workspace sessions for the current directory.
+    """
+    core.list_workspace_sessions()
+
+
+@workspace_app.command("open")
+def workspace_open(
+    label: Annotated[
+        str, typer.Argument(help="The label of the workspace to open")
+    ],
+):
+    """
+    Open/attach to a specific workspace session.
+    """
+    core.open_workspace_session(label)
+
+
+@workspace_app.command("rm")
+def workspace_remove(
+    target: Annotated[
+        str, typer.Argument(help="The label of the workspace to remove, or 'all'")
+    ],
+):
+    """
+    Remove a workspace session (or all workspace sessions).
+    This removes all worktrees, branches, and the tmux session.
+    """
+    if target.lower() == "all":
+        core.remove_all_workspace_sessions()
+    else:
+        core.remove_workspace_session(target)
 
 
 # This is for `python -m par`

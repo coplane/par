@@ -118,3 +118,31 @@ def is_tmux_running() -> bool:
         return False
     except subprocess.CalledProcessError:  # Should not happen with check=False
         return False
+
+
+def detect_git_repos(directory: Path) -> List[Path]:
+    """Detect git repositories in subdirectories."""
+    repos = []
+    if not directory.is_dir():
+        return repos
+    
+    for subdir in directory.iterdir():
+        if subdir.is_dir() and (subdir / ".git").exists():
+            repos.append(subdir)
+    
+    return sorted(repos)
+
+
+def get_workspace_worktree_path(workspace_root: Path, workspace_label: str, repo_name: str, label: str) -> Path:
+    """Get the path for a workspace worktree."""
+    workspace_id = hashlib.sha256(str(workspace_root.resolve()).encode()).hexdigest()[:8]
+    workspace_dir = get_data_dir() / "workspaces" / workspace_id / workspace_label
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    return workspace_dir / repo_name / label
+
+
+def get_workspace_session_name(workspace_root: Path, workspace_label: str) -> str:
+    """Generate a tmux session name for workspace."""
+    workspace_name = workspace_root.name.lower().replace(" ", "-").replace(".", "-")[:15]
+    workspace_id = hashlib.sha256(str(workspace_root.resolve()).encode()).hexdigest()[:4]
+    return f"par-ws-{workspace_name}-{workspace_id}-{workspace_label}"
