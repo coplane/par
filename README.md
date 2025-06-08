@@ -10,11 +10,11 @@ Tools like OpenAI Codex, Claude Code, and other coding agents have made it easie
 
 `par` solves this by creating **isolated development environments** for each task:
 
-- **🔀 Git Worktrees**: Each workspace gets its own directory and branch
+- **🔀 Git Worktrees**: Each session gets its own directory and branch
 - **🖥️ Tmux Sessions**: Persistent terminal sessions where agents can run in the background
-- **🏷️ Simple Labels**: Easy-to-remember names for each workspace
+- **🏷️ Simple Labels**: Easy-to-remember names for each session
 - **📡 Remote Control**: Send commands to any or all sessions
-- **👁️ Overview Mode**: Monitor all workspaces simultaneously
+- **👁️ Overview Mode**: Monitor all sessions simultaneously
 - **🏢 Multi-Repo Workspaces**: Unified development across multiple repositories
 - **🎨 IDE Integration**: Native VSCode/Cursor workspace support with auto-generated configs
 
@@ -27,21 +27,21 @@ https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
 ### 🚀 **Quick Start**
 ```bash
 par start feature-auth    # Creates worktree, branch, and tmux session
-par start bugfix-login    # Another isolated workspace
-par start experiment-ai   # Yet another workspace
+par start bugfix-login    # Another isolated session
+par start experiment-ai   # Yet another session
 ```
 
 ### 📋 **Session Management**
 ```bash
-par ls                    # List all active workspaces
-par open feature-auth     # Switch to a specific workspace
+par ls                    # List all active sessions
+par open feature-auth     # Switch to a specific session
 par rm bugfix-login       # Clean up completed work
 ```
 
 ### 📡 **Remote Execution**  
 ```bash
-par send feature-auth "pnpm test"           # Run tests in one workspace
-par send all "git status"                  # Check status across all workspaces
+par send feature-auth "pnpm test"           # Run tests in one session
+par send all "git status"                  # Check status across all sessions
 ```
 
 ### 🎛️ **Control Center**
@@ -79,7 +79,7 @@ par --help
 
 ## Usage
 
-### Starting a New Workspace
+### Starting a New Session
 
 Create a new isolated development environment:
 
@@ -121,36 +121,36 @@ par checkout develop --label dev-work
 - `username:branch` - Remote branch from fork
 - `remote/branch` - Branch from specific remote
 
-### Managing Workspaces
+### Managing Sessions
 
-**List all workspaces:**
+**List all sessions:**
 ```bash
 par ls
 ```
 
-**Open a workspace:**
+**Open a session:**
 ```bash
 par open my-feature
 ```
 
 **Remove completed work:**
 ```bash
-par rm my-feature      # Remove specific workspace
-par rm all             # Remove all workspaces (with confirmation)
+par rm my-feature      # Remove specific session
+par rm all             # Remove all sessions (with confirmation)
 ```
 
 > **Note**: When removing checkout sessions, `par` only removes the worktree and tmux session. It does not delete the original branch since it wasn't created by `par`.
 
 ### Remote Command Execution
 
-**Send commands to specific workspaces:**
+**Send commands to specific sessions:**
 ```bash
 par send my-feature "npm install"
 par send backend-work "python manage.py migrate"
 par send docs-update "mkdocs serve"
 ```
 
-**Broadcast to all workspaces:**
+**Broadcast to all sessions:**
 ```bash
 par send all "git status"
 par send all "npm test"
@@ -158,13 +158,13 @@ par send all "npm test"
 
 ### Control Center
 
-View all workspaces simultaneously in a tiled tmux layout:
+View all sessions simultaneously in a tiled tmux layout:
 
 ```bash
 par control-center
 ```
 
-> **Note**: Must be run from outside tmux. Creates a new session and attaches to each workspace in its own pane.
+> **Note**: Must be run from outside tmux. Creates a new session and attaches to each session in its own pane.
 
 ### Automatic Initialization with .par.yaml
 
@@ -194,7 +194,7 @@ initialization:
 - `file_exists:path` - Check if file exists  
 - `env:VAR_NAME` - Check if environment variable is set
 
-When you run `par start my-feature`, these commands will automatically execute in the new worktree's tmux session.
+When you run `par start my-feature`, these commands will automatically execute in the new session's tmux environment.
 
 ## Multi-Repository Workspaces
 
