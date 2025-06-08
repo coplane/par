@@ -15,6 +15,8 @@ Tools like OpenAI Codex, Claude Code, and other coding agents have made it easie
 - **🏷️ Simple Labels**: Easy-to-remember names for each workspace
 - **📡 Remote Control**: Send commands to any or all sessions
 - **👁️ Overview Mode**: Monitor all workspaces simultaneously
+- **🏢 Multi-Repo Workspaces**: Unified development across multiple repositories
+- **🎨 IDE Integration**: Native VSCode/Cursor workspace support with auto-generated configs
 
 https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
 
@@ -45,6 +47,13 @@ par send all "git status"                  # Check status across all workspaces
 ### 🎛️ **Control Center**
 ```bash
 par control-center        # View all sessions in a tiled layout
+```
+
+### 🏢 **Multi-Repository Workspaces**
+```bash
+par workspace start feature-auth --repos frontend,backend
+par workspace code feature-auth     # Open in VSCode with multi-repo support
+par workspace open feature-auth     # Attach to unified tmux session
 ```
 
 ## Installation
@@ -186,6 +195,217 @@ initialization:
 - `env:VAR_NAME` - Check if environment variable is set
 
 When you run `par start my-feature`, these commands will automatically execute in the new worktree's tmux session.
+
+## Multi-Repository Workspaces
+
+For projects spanning multiple repositories (like frontend/backend splits or microservices), `par` provides **workspace** functionality that manages multiple repositories together in a unified development environment.
+
+### Why Workspaces?
+
+When working on features that span multiple repositories, you typically need to:
+- Create branches with the same name across repos
+- Keep terminal sessions open for each repo
+- Switch between repositories frequently
+- Manage development servers for multiple services
+
+Workspaces solve this by creating a single tmux session with dedicated panes for each repository, all sharing the same branch name.
+
+### Quick Start
+
+```bash
+# Navigate to directory containing multiple repos
+cd /path/to/my-project     # contains frontend/, backend/, docs/
+
+# Start workspace with auto-detection
+par workspace start feature-auth
+
+# Or specify repositories explicitly
+par workspace start feature-auth --repos frontend,backend
+
+# Open in your preferred IDE with proper multi-repo support
+par workspace code feature-auth     # VSCode
+par workspace cursor feature-auth   # Cursor
+```
+
+### Workspace Commands
+
+**Create a workspace:**
+```bash
+par workspace start <label> [--repos repo1,repo2] [--open]
+```
+
+**List workspaces:**
+```bash
+par workspace ls
+```
+
+**Open workspace:**
+```bash
+par workspace open <label>        # Attach to tmux session
+par workspace code <label>        # Open in VSCode  
+par workspace cursor <label>      # Open in Cursor
+```
+
+**Remove workspace:**
+```bash
+par workspace rm <label>          # Remove specific workspace
+par workspace rm all              # Remove all workspaces
+```
+
+### How Workspaces Work
+
+When you create a workspace, `par` automatically:
+
+1. **Detects repositories** in the current directory (or uses `--repos`)
+2. **Creates worktrees** for each repository with the same branch name
+3. **Creates tmux session** with multiple panes (one per repository)  
+4. **Generates IDE workspace files** for seamless editor integration
+
+**Example directory structure:**
+```
+my-fullstack-app/
+├── frontend/           # React app
+├── backend/            # Python API  
+└── docs/              # Documentation
+
+# After: par workspace start user-auth
+# Creates branches: user-auth in all three repos
+# Creates tmux session with 3 panes
+# Each pane starts in its respective worktree
+```
+
+### IDE Integration
+
+Workspaces include first-class IDE support that solves the common problem of multi-repo development in editors.
+
+**VSCode Integration:**
+```bash
+par workspace code user-auth
+```
+
+This generates and opens a `.code-workspace` file containing:
+```json
+{
+  "folders": [
+    {
+      "name": "frontend (user-auth)",
+      "path": "/path/to/worktrees/frontend/user-auth"
+    },
+    {
+      "name": "backend (user-auth)", 
+      "path": "/path/to/worktrees/backend/user-auth"
+    }
+  ],
+  "settings": {
+    "git.detectSubmodules": false,
+    "git.repositoryScanMaxDepth": 1
+  }
+}
+```
+
+**Benefits:**
+- Each repository appears as a separate folder in the explorer
+- Git operations work correctly for each repository
+- All repositories are on the correct feature branch
+- No worktree plugin configuration needed
+
+### Repository Specification
+
+**Auto-detection (recommended):**
+```bash
+par workspace start feature-name
+# Automatically finds all git repositories in current directory
+```
+
+**Explicit specification:**
+```bash
+par workspace start feature-name --repos frontend,backend,shared
+# Only includes specified repositories
+```
+
+**Comma-separated syntax:**
+```bash
+--repos repo1,repo2,repo3
+--repos "frontend, backend, docs"    # Spaces are trimmed
+```
+
+### Workspace Organization
+
+Workspaces are organized separately from single-repo sessions:
+
+```
+~/.local/share/par/
+├── worktrees/                  # Single-repo sessions
+│   └── <repo-hash>/
+└── workspaces/                 # Multi-repo workspaces
+    └── <workspace-hash>/
+        └── <workspace-label>/
+            ├── frontend/
+            │   └── feature-auth/     # Worktree
+            ├── backend/
+            │   └── feature-auth/     # Worktree  
+            └── feature-auth.code-workspace
+```
+
+### Workspace Initialization
+
+Workspaces support the same `.par.yaml` initialization as single repositories. Place the file in your workspace root directory:
+
+```yaml
+# .par.yaml in workspace root
+initialization:
+  commands:
+    - name: "Install frontend dependencies"
+      command: "pnpm install"
+      working_directory: "frontend"
+      
+    - name: "Install backend dependencies"  
+      command: "uv sync"
+      working_directory: "backend"
+      
+    - name: "Start development servers"
+      command: "npm run dev"
+      working_directory: "frontend"
+```
+
+The `working_directory` field runs commands in specific subdirectories, perfect for multi-repo setups.
+
+### Example Workflows
+
+**Full-stack feature development:**
+```bash
+# 1. Start workspace for new feature
+cd my-app/
+par workspace start user-profiles --repos frontend,backend
+
+# 2. Open in IDE with proper multi-repo support
+par workspace code user-profiles
+
+# 3. Work across repositories - each has user-profiles branch
+# 4. Use tmux session for terminal work
+par workspace open user-profiles
+
+# 5. Clean up when feature is complete
+par workspace rm user-profiles
+```
+
+**Microservices development:**
+```bash
+# Work on API changes affecting multiple services
+par workspace start api-v2 --repos auth-service,user-service,gateway
+
+# All services get api-v2 branch
+# Single tmux session for monitoring all services
+# IDE workspace shows all services together
+```
+
+### Branch Creation
+
+Workspaces create branches from the **currently checked out branch** in each repository, not necessarily from `main`. This allows for:
+
+- **Feature branches from develop**: If repos are on `develop`, workspace branches from `develop`
+- **Different base branches**: Each repo can be on different branches before workspace creation
+- **Flexible workflows**: Supports GitFlow, GitHub Flow, or custom branching strategies
 
 ## Advanced Usage
 
