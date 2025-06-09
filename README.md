@@ -245,21 +245,15 @@ initialization:
 
     - name: "Setup environment file"
       command: "cd frontend && cp .env.example .env"
-      condition: "file_exists:frontend/.env.example"
-
+      
     - name: "Install backend dependencies"
       command: "cd backend && uv sync"
-      condition: "directory_exists:backend"
-
+      
     # Simple string commands are also supported
     - "echo 'Workspace initialized!'"
 ```
 
-**Supported condition types:**
-
-- `directory_exists:path` - Check if directory exists
-- `file_exists:path` - Check if file exists
-- `env:VAR_NAME` - Check if environment variable is set
+All commands start from the worktree root directory. Use `cd <directory> &&` to run commands in subdirectories.
 
 When you run `par start my-feature`, these commands will automatically execute in the new session's tmux environment.
 
@@ -428,26 +422,29 @@ Workspaces are organized separately from single-repo sessions:
 
 ### Workspace Initialization
 
-Workspaces support the same `.par.yaml` initialization as single repositories. Place the file in your workspace root directory:
+Workspaces support the same `.par.yaml` initialization as single repositories. When you create a workspace, `par` runs the initialization commands from each repository's `.par.yaml` file in their respective worktrees.
+
+For example, if both `frontend` and `backend` repositories have their own `.par.yaml` files:
 
 ```yaml
-# .par.yaml in workspace root
+# frontend/.par.yaml
 initialization:
   commands:
-    - name: "Install frontend dependencies"
+    - name: "Install dependencies"
       command: "pnpm install"
-      working_directory: "frontend"
+    - name: "Setup environment"
+      command: "cp .env.example .env"
 
-    - name: "Install backend dependencies"
+# backend/.par.yaml
+initialization:
+  commands:
+    - name: "Install dependencies"
       command: "uv sync"
-      working_directory: "backend"
-
-    - name: "Start development servers"
-      command: "npm run dev"
-      working_directory: "frontend"
+    - name: "Run migrations"
+      command: "python manage.py migrate"
 ```
 
-The `working_directory` field runs commands in specific subdirectories, perfect for multi-repo setups.
+Each repository's initialization runs in its own worktree, ensuring proper isolation and consistent behavior.
 
 ### Example Workflows
 
