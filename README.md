@@ -1,6 +1,6 @@
 # Par: Parallel Worktree & Session Manager
 
-### _the agentic terminal multiplexer_
+### _agentic parallel development_
 
 > **AI-enhanced parallel development workflows with intelligent automation and beautiful terminal experience**
 
@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
 
 ```bash
 par                       # See your current context and available commands
-par start feature-auth    # Creates worktree, branch, and tmux session
+par start feature-auth --open    # Creates worktree, branch, and tmux session
 par claude --agent        # Start Claude in autonomous agent mode
 par cursor               # Open workspace in Cursor IDE
 ```
