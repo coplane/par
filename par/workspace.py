@@ -1,6 +1,7 @@
 """Workspace management for multi-repository development."""
 
 import datetime
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -287,13 +288,17 @@ def remove_workspace_session(label: str):
         operations.remove_workspace_worktree(repo_path, worktree_path)
         operations.delete_workspace_branch(repo_path, branch_name)
 
-    # Remove workspace directory if empty
+    # Remove entire workspace directory
     if session_data["repos"]:
         first_worktree_path = Path(session_data["repos"][0]["worktree_path"])
         workspace_dir = first_worktree_path.parent.parent
         try:
-            workspace_dir.rmdir()  # Only removes if empty
-        except OSError:
+            shutil.rmtree(workspace_dir)  # Remove entire directory tree
+            typer.secho(f"Removed workspace directory: {workspace_dir}", fg="dim")
+        except OSError as e:
+            typer.secho(
+                f"Warning: Could not remove workspace directory: {e}", fg="yellow"
+            )
             pass  # Directory not empty or doesn't exist
 
     # Update state
