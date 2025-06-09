@@ -1,6 +1,4 @@
-# Par: Parallel Worktree & Session Manager
-
-### _agentic parallel development_
+# Par: Agentic Parallel Development Toolkit
 
 > **AI-enhanced parallel development workflows with intelligent automation and beautiful terminal experience**
 
