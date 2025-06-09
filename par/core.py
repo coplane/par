@@ -10,7 +10,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import initialization, checkout, operations, utils
+from . import checkout, initialization, operations, utils
+
 
 # State management - simplified from SessionManager class
 def _get_state_file() -> Path:
@@ -91,7 +92,7 @@ def start_session(label: str, open_session: bool = False):
     # Run initialization if .par.yaml exists
     config = initialization.load_par_config(repo_root)
     if config:
-        initialization.run_initialization(config, session_name)
+        initialization.run_initialization(config, session_name, worktree_path)
 
     # Update state
     sessions[label] = {
@@ -108,7 +109,7 @@ def start_session(label: str, open_session: bool = False):
     typer.echo(f"  Worktree: {worktree_path}")
     typer.echo(f"  Branch: {label}")
     typer.echo(f"  Session: {session_name}")
-    
+
     if open_session:
         typer.echo("Opening session...")
         operations.open_tmux_session(session_name)
@@ -131,7 +132,7 @@ def remove_session(label: str):
     # Clean up resources
     operations.kill_tmux_session(session_data["tmux_session_name"])
     operations.remove_worktree(Path(session_data["worktree_path"]))
-    
+
     # Only delete branch if it was created by par (not checkout)
     if not session_data.get("is_checkout", False):
         operations.delete_branch(session_data["branch_name"])
@@ -264,17 +265,17 @@ def open_session(label: str):
 def checkout_session(target: str, custom_label: Optional[str] = None):
     """Checkout existing branch or PR into new session."""
     sessions = _get_repo_sessions()
-    
+
     try:
         # Parse target to determine branch name and checkout strategy
         branch_name, strategy = checkout.parse_checkout_target(target)
     except ValueError as e:
         typer.secho(f"Error: {e}", fg="red", err=True)
         raise typer.Exit(1)
-    
+
     # Generate label (custom or derived from branch name)
     label = custom_label or branch_name
-    
+
     if label in sessions:
         typer.secho(f"Error: Session '{label}' already exists.", fg="red", err=True)
         raise typer.Exit(1)
@@ -310,7 +311,9 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
     _update_repo_sessions(sessions)
 
     typer.secho(
-        f"Successfully checked out '{target}' as session '{label}'.", fg="bright_green", bold=True
+        f"Successfully checked out '{target}' as session '{label}'.",
+        fg="bright_green",
+        bold=True,
     )
     typer.echo(f"  Worktree: {worktree_path}")
     typer.echo(f"  Branch: {branch_name}")

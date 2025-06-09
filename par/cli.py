@@ -1,6 +1,7 @@
 # src/par/cli.py
+from typing import List, Optional
+
 import typer
-from typing import Optional, List
 from typing_extensions import Annotated
 
 from . import core
@@ -84,7 +85,7 @@ def send(
         str,
         typer.Argument(
             help="The label of the session to send the command to, or 'all'.",
-            autocompletion=get_session_labels_with_all
+            autocompletion=get_session_labels_with_all,
         ),
     ],
     command_to_send: Annotated[
@@ -110,7 +111,11 @@ def list_sessions():
 @app.command()
 def rm(
     target: Annotated[
-        str, typer.Argument(help="The label of the session to remove, or 'all'.", autocompletion=get_session_labels_with_all)
+        str,
+        typer.Argument(
+            help="The label of the session to remove, or 'all'.",
+            autocompletion=get_session_labels_with_all,
+        ),
     ],
 ):
     """
@@ -134,8 +139,9 @@ def checkout(
     label: Annotated[
         Optional[str],
         typer.Option(
-            "--label", "-l",
-            help="Custom label for the session (defaults to branch name)"
+            "--label",
+            "-l",
+            help="Custom label for the session (defaults to branch name)",
         ),
     ] = None,
 ):
@@ -149,7 +155,11 @@ def checkout(
 @app.command()
 def open(
     label: Annotated[
-        str, typer.Argument(help="The label of the session to open/attach to.", autocompletion=get_session_labels)
+        str,
+        typer.Argument(
+            help="The label of the session to open/attach to.",
+            autocompletion=get_session_labels,
+        ),
     ],
 ):
     """
