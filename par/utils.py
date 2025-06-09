@@ -4,7 +4,7 @@ import hashlib
 import os
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import typer
 
@@ -118,3 +118,72 @@ def is_tmux_running() -> bool:
         return False
     except subprocess.CalledProcessError:  # Should not happen with check=False
         return False
+
+
+def detect_git_repos(directory: Path) -> List[Path]:
+    """Detect git repositories in subdirectories."""
+    repos = []
+    if not directory.is_dir():
+        return repos
+
+    for subdir in directory.iterdir():
+        if subdir.is_dir() and (subdir / ".git").exists():
+            repos.append(subdir)
+
+    return sorted(repos)
+
+
+def get_workspace_worktree_path(
+    workspace_root: Path, workspace_label: str, repo_name: str, label: str
+) -> Path:
+    """Get the path for a workspace worktree."""
+    workspace_id = hashlib.sha256(str(workspace_root.resolve()).encode()).hexdigest()[
+        :8
+    ]
+    workspace_dir = get_data_dir() / "workspaces" / workspace_id / workspace_label
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    return workspace_dir / repo_name / label
+
+
+def get_workspace_session_name(workspace_root: Path, workspace_label: str) -> str:
+    """Generate a tmux session name for workspace."""
+    workspace_name = (
+        workspace_root.name.lower().replace(" ", "-").replace(".", "-")[:15]
+    )
+    workspace_id = hashlib.sha256(str(workspace_root.resolve()).encode()).hexdigest()[
+        :4
+    ]
+    return f"par-ws-{workspace_name}-{workspace_id}-{workspace_label}"
+
+
+def generate_vscode_workspace(workspace_label: str, repos_data: List[Dict]) -> Dict:
+    """Generate a VSCode workspace configuration."""
+    folders = []
+
+    for repo_data in repos_data:
+        folders.append(
+            {
+                "name": f"{repo_data['repo_name']} ({workspace_label})",
+                "path": repo_data["worktree_path"],
+            }
+        )
+
+    workspace_config = {
+        "folders": folders,
+        "settings": {"git.detectSubmodules": False, "git.repositoryScanMaxDepth": 1},
+        "extensions": {
+            "recommendations": ["ms-vscode.vscode-git-graph", "eamodio.gitlens"]
+        },
+    }
+
+    return workspace_config
+
+
+def get_workspace_file_path(workspace_root: Path, workspace_label: str) -> Path:
+    """Get the path for a workspace file."""
+    workspace_id = hashlib.sha256(str(workspace_root.resolve()).encode()).hexdigest()[
+        :8
+    ]
+    workspace_dir = get_data_dir() / "workspaces" / workspace_id / workspace_label
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    return workspace_dir / f"{workspace_label}.code-workspace"

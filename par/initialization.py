@@ -28,7 +28,10 @@ def load_par_config(repo_root: Path) -> Optional[Dict[str, Any]]:
 
 
 def run_initialization(
-    config: Dict[str, Any], session_name: str, worktree_path: Path
+    config: Dict[str, Any],
+    session_name: str,
+    worktree_path: Path,
+    workspace_mode: bool = False,
 ) -> None:
     """Run initialization commands from .par.yaml configuration."""
     initialization = config.get("initialization", {})
@@ -65,10 +68,15 @@ def run_initialization(
             continue
 
         console.print(f"[green]Running:[/green] {name}")
-        console.print(f"[dim]  Command: {command}[/dim]")
 
         # Always cd to worktree root first to ensure consistent starting point
         full_command = f"cd {worktree_path} && {command}"
+
+        # In workspace mode, show which repo we're running in
+        if workspace_mode:
+            console.print(f"[dim]  Repo: {worktree_path.name}[/dim]")
+
+        console.print(f"[dim]  Command: {command}[/dim]")
 
         try:
             operations.send_tmux_keys(session_name, full_command)

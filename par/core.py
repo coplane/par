@@ -211,21 +211,41 @@ def send_command(target: str, command: str):
 
 
 def list_sessions():
-    """List all sessions for the current repository."""
-    sessions = _get_repo_sessions()
+    """List all sessions and workspaces for the current repository."""
+    from . import workspace
 
-    if not sessions:
-        typer.secho("No active sessions.", fg="yellow")
+    sessions = _get_repo_sessions()
+    current_repo_root = utils.get_git_repo_root()
+    current_repo_name = current_repo_root.name
+
+    # Get workspaces that contain this repository
+    relevant_workspaces = []
+    current_dir = current_repo_root.parent  # Go up to find workspace directories
+    workspace_sessions = workspace._get_workspace_sessions(current_dir)
+
+    for ws_label, ws_data in workspace_sessions.items():
+        # Check if this workspace contains the current repository
+        for repo_data in ws_data.get("repos", []):
+            if repo_data["repo_name"] == current_repo_name:
+                relevant_workspaces.append((ws_label, ws_data, repo_data))
+                break
+
+    if not sessions and not relevant_workspaces:
+        typer.secho(
+            "No active sessions or workspaces for this repository.", fg="yellow"
+        )
         return
 
     console = Console()
-    table = Table(title="Par Sessions")
+    table = Table(title=f"Par Development Contexts for {current_repo_name}")
     table.add_column("Label", style="cyan", no_wrap=True)
+    table.add_column("Type", style="bold blue", no_wrap=True)
     table.add_column("Tmux Session", style="magenta")
     table.add_column("Branch", style="green")
-    table.add_column("Worktree Path", style="blue")
+    table.add_column("Other Repos", style="yellow")
     table.add_column("Created", style="dim")
 
+    # Add single-repo sessions
     for label, data in sorted(sessions.items()):
         session_active = (
             "✅" if operations.tmux_session_exists(data["tmux_session_name"]) else "❌"
@@ -233,33 +253,72 @@ def list_sessions():
 
         table.add_row(
             label,
+            "Session",
             f"{data['tmux_session_name']} ({session_active})",
             data["branch_name"],
-            data["worktree_path"],
+            "-",
             data["created_at"][:16],  # Just date and time
+        )
+
+    # Add relevant workspaces
+    for ws_label, ws_data, repo_data in sorted(relevant_workspaces):
+        session_active = (
+            "✅" if operations.tmux_session_exists(ws_data["session_name"]) else "❌"
+        )
+
+        # Get other repos in this workspace
+        other_repos = [
+            r["repo_name"]
+            for r in ws_data.get("repos", [])
+            if r["repo_name"] != current_repo_name
+        ]
+        other_repos_str = ", ".join(other_repos) if other_repos else "-"
+
+        table.add_row(
+            ws_label,
+            "Workspace",
+            f"{ws_data['session_name']} ({session_active})",
+            repo_data["branch_name"],
+            other_repos_str,
+            ws_data["created_at"][:16],
         )
 
     console.print(table)
 
 
 def open_session(label: str):
-    """Open/attach to a specific session."""
+    """Open/attach to a specific session or workspace."""
+    from . import workspace
+
+    # First try single-repo sessions
     sessions = _get_repo_sessions()
     session_data = sessions.get(label)
 
-    if not session_data:
-        typer.secho(f"Error: Session '{label}' not found.", fg="red", err=True)
-        raise typer.Exit(1)
+    if session_data:
+        # Handle single-repo session
+        session_name = session_data["tmux_session_name"]
 
-    session_name = session_data["tmux_session_name"]
+        if not operations.tmux_session_exists(session_name):
+            typer.secho(f"Recreating tmux session '{session_name}'...", fg="yellow")
+            operations.create_tmux_session(
+                session_name, Path(session_data["worktree_path"])
+            )
 
-    if not operations.tmux_session_exists(session_name):
-        typer.secho(f"Recreating tmux session '{session_name}'...", fg="yellow")
-        operations.create_tmux_session(
-            session_name, Path(session_data["worktree_path"])
-        )
+        operations.open_tmux_session(session_name)
+        return
 
-    operations.open_tmux_session(session_name)
+    # Try workspaces
+    current_repo_root = utils.get_git_repo_root()
+    current_dir = current_repo_root.parent
+    workspace_sessions = workspace._get_workspace_sessions(current_dir)
+
+    if label in workspace_sessions:
+        # Handle workspace
+        workspace.open_workspace_session(label)
+        return
+
+    typer.secho(f"Error: Session or workspace '{label}' not found.", fg="red", err=True)
+    raise typer.Exit(1)
 
 
 def checkout_session(target: str, custom_label: Optional[str] = None):
@@ -322,20 +381,54 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
 
 
 def open_control_center():
-    """Open all sessions in a tiled tmux layout."""
-    sessions = _get_repo_sessions()
+    """Open all sessions and workspaces in a tiled tmux layout."""
+    from . import workspace
 
-    if not sessions:
-        typer.secho("No sessions to display.", fg="yellow")
+    sessions = _get_repo_sessions()
+    current_repo_root = utils.get_git_repo_root()
+    current_repo_name = current_repo_root.name
+
+    # Get workspaces that contain this repository
+    current_dir = current_repo_root.parent
+    workspace_sessions = workspace._get_workspace_sessions(current_dir)
+    relevant_workspaces = []
+
+    for ws_label, ws_data in workspace_sessions.items():
+        # Check if this workspace contains the current repository
+        for repo_data in ws_data.get("repos", []):
+            if repo_data["repo_name"] == current_repo_name:
+                relevant_workspaces.append((ws_label, ws_data))
+                break
+
+    if not sessions and not relevant_workspaces:
+        typer.secho("No sessions or workspaces to display.", fg="yellow")
         return
 
-    # Ensure all sessions exist
-    active_sessions = []
+    # Prepare all contexts for control center
+    active_contexts = []
+
+    # Add single-repo sessions
     for label, data in sessions.items():
         session_name = data["tmux_session_name"]
         if not operations.tmux_session_exists(session_name):
             typer.secho(f"Recreating session for '{label}'...", fg="yellow")
             operations.create_tmux_session(session_name, Path(data["worktree_path"]))
-        active_sessions.append(data)
+        active_contexts.append(data)
 
-    operations.open_control_center(active_sessions)
+    # Add workspace sessions
+    for ws_label, ws_data in relevant_workspaces:
+        session_name = ws_data["session_name"]
+        if not operations.tmux_session_exists(session_name):
+            typer.secho(
+                f"Recreating workspace session for '{ws_label}'...", fg="yellow"
+            )
+            operations.create_workspace_tmux_session(session_name, ws_data["repos"])
+
+        # Convert workspace data to match session data format for control center
+        workspace_context = {
+            "tmux_session_name": session_name,
+            "worktree_path": ws_data.get("workspace_root", ""),  # Use workspace root
+        }
+        active_contexts.append(workspace_context)
+
+    operations.open_control_center(active_contexts)

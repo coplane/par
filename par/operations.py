@@ -252,3 +252,72 @@ def open_control_center(sessions_data: List[dict]):
 
     typer.secho(f"Created control center with {len(sessions_data)} panes.", fg="green")
     open_tmux_session(cc_session_name)
+
+
+def create_workspace_worktree(
+    repo_path: Path, label: str, worktree_path: Path, base_branch: Optional[str] = None
+):
+    """Create a new git worktree and branch for a specific repo in workspace."""
+    cmd = ["git", "worktree", "add", "-b", label, str(worktree_path)]
+    if base_branch:
+        cmd.append(base_branch)
+
+    try:
+        run_cmd(cmd, cwd=repo_path)
+        typer.secho(
+            f"Created worktree '{label}' at {worktree_path} for {repo_path.name}",
+            fg="green",
+        )
+    except Exception as e:
+        typer.secho(
+            f"Failed to create worktree '{label}' for {repo_path.name}: {e}",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
+def remove_workspace_worktree(repo_path: Path, worktree_path: Path):
+    """Remove a git worktree for a specific repo in workspace."""
+    cmd = ["git", "worktree", "remove", "--force", str(worktree_path)]
+
+    try:
+        run_cmd(cmd, cwd=repo_path, suppress_output=True)
+        typer.secho(
+            f"Removed worktree at {worktree_path} for {repo_path.name}", fg="green"
+        )
+    except Exception:
+        # Often fails if path doesn't exist - that's OK during cleanup
+        pass
+
+
+def delete_workspace_branch(repo_path: Path, branch_name: str):
+    """Delete a git branch for a specific repo in workspace."""
+    cmd = ["git", "branch", "-D", branch_name]
+
+    try:
+        run_cmd(cmd, cwd=repo_path, suppress_output=True)
+        typer.secho(f"Deleted branch '{branch_name}' in {repo_path.name}", fg="green")
+    except Exception:
+        # Often fails if branch doesn't exist - that's OK during cleanup
+        pass
+
+
+def create_workspace_tmux_session(session_name: str, repos_data: List[dict]):
+    """Create a workspace tmux session in the workspace root directory."""
+    _check_tmux()
+
+    if not repos_data:
+        typer.secho("No repos provided for workspace session.", fg="red", err=True)
+        raise typer.Exit(1)
+
+    # Get workspace root directory (parent of all repo worktrees)
+    first_worktree_path = Path(repos_data[0]["worktree_path"])
+    workspace_root = first_worktree_path.parent.parent
+
+    # Create session in workspace root directory
+    create_tmux_session(session_name, workspace_root)
+
+    typer.secho(
+        f"Created workspace session '{session_name}' in workspace root.", fg="green"
+    )

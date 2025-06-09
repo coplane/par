@@ -4,7 +4,7 @@ from typing import List, Optional
 import typer
 from typing_extensions import Annotated
 
-from . import core
+from . import core, workspace
 
 app = typer.Typer(
     name="par",
@@ -13,10 +13,28 @@ app = typer.Typer(
 
 
 def get_session_labels() -> List[str]:
-    """Get list of session labels for autocomplete."""
+    """Get list of session and workspace labels for autocomplete."""
     try:
+        labels = []
+
+        # Add single-repo sessions
         sessions = core._get_repo_sessions()
-        return list(sessions.keys())
+        labels.extend(sessions.keys())
+
+        # Add workspaces that contain current repo
+        current_repo_root = core.utils.get_git_repo_root()
+        current_repo_name = current_repo_root.name
+        current_dir = current_repo_root.parent
+        workspace_sessions = workspace._get_workspace_sessions(current_dir)
+
+        for ws_label, ws_data in workspace_sessions.items():
+            # Check if this workspace contains the current repository
+            for repo_data in ws_data.get("repos", []):
+                if repo_data["repo_name"] == current_repo_name:
+                    labels.append(ws_label)
+                    break
+
+        return labels
     except Exception:
         return []
 
@@ -69,10 +87,9 @@ def start(
 
 
 def get_session_labels_with_all() -> List[str]:
-    """Get list of session labels plus 'all' for autocomplete."""
+    """Get list of session and workspace labels plus 'all' for autocomplete."""
     try:
-        sessions = core._get_repo_sessions()
-        labels = list(sessions.keys())
+        labels = get_session_labels()  # Reuse the unified function
         labels.append("all")
         return labels
     except Exception:
@@ -176,6 +193,100 @@ def control_center():
     Must be run from within an existing tmux session.
     """
     core.open_control_center()
+
+
+# Workspace commands
+workspace_app = typer.Typer(help="Manage multi-repository workspaces")
+app.add_typer(workspace_app, name="workspace")
+
+
+@workspace_app.command("start")
+def workspace_start(
+    label: Annotated[
+        str,
+        typer.Argument(help="A unique label for the workspace"),
+    ],
+    repos: Annotated[
+        Optional[str],
+        typer.Option(
+            "--repos",
+            "-r",
+            help="Comma-separated repository names (auto-detects if not specified)",
+        ),
+    ] = None,
+    open_session: Annotated[
+        bool,
+        typer.Option("--open", help="Automatically open the workspace after creation"),
+    ] = False,
+):
+    """
+    Start a new multi-repository workspace.
+    Creates worktrees and branches for multiple repos in a single tmux session.
+    """
+    # Parse comma-separated repos
+    repo_list = None
+    if repos:
+        repo_list = [r.strip() for r in repos.split(",") if r.strip()]
+
+    workspace.start_workspace_session(label, repo_list, open_session)
+
+
+@workspace_app.command("ls")
+def workspace_list():
+    """
+    List all workspace sessions for the current directory.
+    """
+    workspace.list_workspace_sessions()
+
+
+@workspace_app.command("open")
+def workspace_open(
+    label: Annotated[str, typer.Argument(help="The label of the workspace to open")],
+):
+    """
+    Open/attach to a specific workspace session.
+    """
+    workspace.open_workspace_session(label)
+
+
+@workspace_app.command("code")
+def workspace_code(
+    label: Annotated[
+        str, typer.Argument(help="The label of the workspace to open in VSCode")
+    ],
+):
+    """
+    Open a workspace in VSCode with all repositories.
+    """
+    workspace.open_workspace_in_ide(label, "code")
+
+
+@workspace_app.command("cursor")
+def workspace_cursor(
+    label: Annotated[
+        str, typer.Argument(help="The label of the workspace to open in Cursor")
+    ],
+):
+    """
+    Open a workspace in Cursor with all repositories.
+    """
+    workspace.open_workspace_in_ide(label, "cursor")
+
+
+@workspace_app.command("rm")
+def workspace_remove(
+    target: Annotated[
+        str, typer.Argument(help="The label of the workspace to remove, or 'all'")
+    ],
+):
+    """
+    Remove a workspace session (or all workspace sessions).
+    This removes all worktrees, branches, and the tmux session.
+    """
+    if target.lower() == "all":
+        workspace.remove_all_workspace_sessions()
+    else:
+        workspace.remove_workspace_session(target)
 
 
 # This is for `python -m par`
