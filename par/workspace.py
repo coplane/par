@@ -294,7 +294,7 @@ def remove_workspace_session(label: str):
         workspace_dir = first_worktree_path.parent.parent
         try:
             shutil.rmtree(workspace_dir)  # Remove entire directory tree
-            typer.secho(f"Removed workspace directory: {workspace_dir}", fg="dim")
+            typer.secho(f"Removed workspace directory: {workspace_dir}", dim=True)
         except OSError as e:
             typer.secho(
                 f"Warning: Could not remove workspace directory: {e}", fg="yellow"
