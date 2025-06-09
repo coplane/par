@@ -29,7 +29,9 @@ def _update_workspace_sessions(workspace_root: Path, sessions: Dict[str, Any]):
 
 
 # Workspace operations helpers
-def _prepare_workspace_repos(repos: Optional[List[str]], workspace_root: Path) -> tuple[List[str], List[Path]]:
+def _prepare_workspace_repos(
+    repos: Optional[List[str]], workspace_root: Path
+) -> tuple[List[str], List[Path]]:
     """Prepare repository names and paths for workspace creation."""
     if not repos:
         # Auto-detect repos
@@ -61,11 +63,13 @@ def _prepare_workspace_repos(repos: Optional[List[str]], workspace_root: Path) -
                 )
                 raise typer.Exit(1)
             repo_paths.append(repo_path)
-    
+
     return repo_names, repo_paths
 
 
-def _validate_workspace_creation(label: str, workspace_root: Path, session_name: str) -> None:
+def _validate_workspace_creation(
+    label: str, workspace_root: Path, session_name: str
+) -> None:
     """Validate that workspace can be created without conflicts."""
     # Check if workspace already exists
     workspace_sessions = _get_workspace_sessions(workspace_root)
@@ -79,10 +83,12 @@ def _validate_workspace_creation(label: str, workspace_root: Path, session_name:
         raise typer.Exit(1)
 
 
-def _create_workspace_worktrees(workspace_root: Path, label: str, repo_names: List[str], repo_paths: List[Path]) -> List[Dict[str, str]]:
+def _create_workspace_worktrees(
+    workspace_root: Path, label: str, repo_names: List[str], repo_paths: List[Path]
+) -> List[Dict[str, str]]:
     """Create worktrees for all repositories in the workspace."""
     repos_data = []
-    
+
     for repo_path, repo_name in zip(repo_paths, repo_names):
         worktree_path = utils.get_workspace_worktree_path(
             workspace_root, label, repo_name, label
@@ -98,20 +104,24 @@ def _create_workspace_worktrees(workspace_root: Path, label: str, repo_names: Li
         # Create resources
         operations.create_workspace_worktree(repo_path, label, worktree_path)
 
-        repos_data.append({
-            "repo_name": repo_name,
-            "repo_path": str(repo_path),
-            "worktree_path": str(worktree_path),
-            "branch_name": label,
-        })
-    
+        repos_data.append(
+            {
+                "repo_name": repo_name,
+                "repo_path": str(repo_path),
+                "worktree_path": str(worktree_path),
+                "branch_name": label,
+            }
+        )
+
     return repos_data
 
 
-def _run_workspace_initialization(repos_data: List[Dict[str, str]], session_name: str) -> bool:
+def _run_workspace_initialization(
+    repos_data: List[Dict[str, str]], session_name: str
+) -> bool:
     """Run initialization for all repositories in the workspace."""
     has_initialization = False
-    
+
     for repo_data in repos_data:
         repo_path = Path(repo_data["repo_path"])
         worktree_path = Path(repo_data["worktree_path"])
@@ -128,24 +138,31 @@ def _run_workspace_initialization(repos_data: List[Dict[str, str]], session_name
         first_worktree_path = Path(repos_data[0]["worktree_path"])
         workspace_root = first_worktree_path.parent.parent
         operations.send_tmux_keys(session_name, f"cd {workspace_root}")
-    
+
     return has_initialization
 
 
-def _update_workspace_state(workspace_root: Path, label: str, repos_data: List[Dict[str, str]], session_name: str) -> None:
+def _update_workspace_state(
+    workspace_root: Path,
+    label: str,
+    repos_data: List[Dict[str, str]],
+    session_name: str,
+) -> None:
     """Update workspace state with new session information."""
     workspace_sessions = _get_workspace_sessions(workspace_root)
-    
+
     workspace_sessions[label] = {
         "session_name": session_name,
         "repos": repos_data,
-        "created_at": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
         "workspace_root": str(workspace_root),
     }
     _update_workspace_sessions(workspace_root, workspace_sessions)
 
 
-def _display_workspace_created(label: str, repos_data: List[Dict[str, str]], session_name: str) -> None:
+def _display_workspace_created(
+    label: str, repos_data: List[Dict[str, str]], session_name: str
+) -> None:
     """Display success message for workspace creation."""
     typer.secho(
         f"Successfully started workspace '{label}' with {len(repos_data)} repositories.",
@@ -163,29 +180,29 @@ def start_workspace_session(
 ):
     """Start a new workspace with multiple repositories."""
     current_dir = Path.cwd()
-    
+
     # Step 1: Prepare repositories
     repo_names, repo_paths = _prepare_workspace_repos(repos, current_dir)
-    
+
     # Step 2: Validate workspace creation
     session_name = utils.get_workspace_session_name(current_dir, label)
     _validate_workspace_creation(label, current_dir, session_name)
-    
+
     # Step 3: Create worktrees
     repos_data = _create_workspace_worktrees(current_dir, label, repo_names, repo_paths)
-    
+
     # Step 4: Create tmux session
     operations.create_workspace_tmux_session(session_name, repos_data)
-    
+
     # Step 5: Run initialization
     _run_workspace_initialization(repos_data, session_name)
-    
+
     # Step 6: Update state
     _update_workspace_state(current_dir, label, repos_data, session_name)
-    
+
     # Step 7: Display success and handle opening
     _display_workspace_created(label, repos_data, session_name)
-    
+
     # Send welcome message to tmux session
     operations.send_tmux_keys(session_name, "par welcome")
 

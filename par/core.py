@@ -67,7 +67,7 @@ def start_session(label: str, open_session: bool = False):
         "worktree_path": str(worktree_path),
         "tmux_session_name": session_name,
         "branch_name": label,
-        "created_at": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
     }
     _update_repo_sessions(sessions)
 
@@ -334,7 +334,7 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
         "worktree_path": str(worktree_path),
         "tmux_session_name": session_name,
         "branch_name": branch_name,
-        "created_at": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
         "checkout_target": target,  # Remember original target
         "is_checkout": True,  # Mark as checkout vs start
     }
