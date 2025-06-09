@@ -179,6 +179,9 @@ def start_workspace_session(
     typer.echo(f"  Session: {session_name}")
     typer.echo(f"To open: par workspace open {label}")
 
+    # Send welcome message to tmux session
+    operations.send_tmux_keys(session_name, "par welcome")
+
     if open_session:
         open_workspace_session(label)
 

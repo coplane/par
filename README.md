@@ -1,17 +1,18 @@
-# Par: Parallel Worktree & Session Manager
+# PAR: Parallel Worktree & Session Manager
+### *the agentic terminal multiplexer*
 
-> **Easily manage parallel development workflows with isolated Git worktrees and tmux sessions**
+> **AI-enhanced parallel development workflows with intelligent automation and beautiful terminal experience**
 
 `par` is a command-line tool designed to simplify parallel development within a single Git repository. It's specifically designed for working with AI coding assistants, background agents, or multiple development contexts simultaneously, `par` creates isolated workspaces that don't interfere with each other.
 
-## Why Par?
+## Why PAR?
 
-Tools like OpenAI Codex, Claude Code, and other coding agents have made it easier to parallelize the work on multiple features, experiments, or problems simultaneously. However, traditional Git branch switching is not ideal for handling multiple concurrent workstreams on the same repository.
-
-`par` solves this by creating **isolated development environments** for each task:
+Tools like Claude Code, GitHub Copilot, and other AI coding assistants have revolutionized parallel development. PAR amplifies this by providing **isolated, AI-enhanced development environments** for each task:
 
 - **🔀 Git Worktrees**: Each session gets its own directory and branch
-- **🖥️ Tmux Sessions**: Persistent terminal sessions where agents can run in the background
+- **🖥️ Tmux Sessions**: Persistent terminal sessions where AI agents can run autonomously
+- **🤖 AI Integration**: Native Claude support with agent mode for intelligent assistance
+- **🔄 Flexible Branch Management**: Rename repository branches independently within workspaces
 - **🏷️ Simple Labels**: Easy-to-remember names for each session
 - **📡 Remote Control**: Send commands to any or all sessions
 - **👁️ Overview Mode**: Monitor all sessions simultaneously
@@ -24,11 +25,12 @@ https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
 
 ## Key Features
 
-### 🚀 **Quick Start**
+### 🚀 **Quick Start with AI**
 ```bash
+par                       # See your current context and available commands
 par start feature-auth    # Creates worktree, branch, and tmux session
-par start bugfix-login    # Another isolated session
-par start experiment-ai   # Yet another session
+par claude --agent        # Start Claude in autonomous agent mode
+par cursor               # Open workspace in Cursor IDE
 ```
 
 ### 📋 **Unified Development Context Management**
@@ -49,11 +51,20 @@ par send all "git status"                  # Check status across all sessions
 par control-center        # View all sessions AND workspaces in a tiled layout
 ```
 
-### 🏢 **Multi-Repository Workspaces**
+### 🏢 **Multi-Repository Workspaces with Smart Branch Management**
 ```bash
-par workspace start feature-auth --repos frontend,backend
-par workspace code feature-auth     # Open in VSCode with multi-repo support
-par workspace open feature-auth     # Attach to unified tmux session
+par ws start feature-auth --repos frontend,backend    # Short alias: 'ws'
+par rename frontend feature/auth-ui                   # Evolve branch names independently
+par rename backend feature/auth-api                   # Workspace stays 'feature-auth'
+par cursor                                           # Open entire workspace in Cursor
+```
+
+### 🤖 **AI-Enhanced Development**
+```bash
+par                       # Beautiful welcome with current context
+par claude --agent        # Claude with bypass permissions (autonomous mode)
+par claude               # Claude in regular mode
+par cursor               # Open current workspace/repo in Cursor
 ```
 
 ## Unified Development Context System
@@ -62,13 +73,20 @@ par workspace open feature-auth     # Attach to unified tmux session
 
 ### Two Development Modes:
 - **Sessions**: Single-repo development with isolated branches (`par start`, `par checkout`)
-- **Workspaces**: Multi-repo development with synchronized branches (`par workspace start`)
+- **Workspaces**: Multi-repo development with flexible branch naming (`par ws start`, `par rename`)
 
 ### Unified Commands:
+- `par` - Context-aware welcome with current information and suggested actions
 - `par ls` - See all your development contexts (sessions + workspaces) in one table
 - `par open <label>` - Switch to any session or workspace
 - `par control-center` - View all contexts in a tiled tmux layout
+- `par claude --agent` - AI assistance available everywhere
 - Tab completion works across both sessions and workspaces
+
+### AI Integration Everywhere:
+- **Context Awareness**: PAR understands your current workspace and provides relevant AI commands
+- **Autonomous Development**: Claude agent mode with bypass permissions for independent coding
+- **IDE Integration**: Seamless Cursor support for AI-enhanced editing
 
 This eliminates the need to remember which type of development context you're working with - just use the label and `par` handles the rest!
 

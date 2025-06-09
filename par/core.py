@@ -110,6 +110,9 @@ def start_session(label: str, open_session: bool = False):
     typer.echo(f"  Branch: {label}")
     typer.echo(f"  Session: {session_name}")
 
+    # Send welcome message to tmux session
+    operations.send_tmux_keys(session_name, "par welcome")
+
     if open_session:
         typer.echo("Opening session...")
         operations.open_tmux_session(session_name)
