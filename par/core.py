@@ -1,7 +1,6 @@
 """Core business logic for par - simplified from actions.py and manager.py"""
 
 import datetime
-import json
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -11,32 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import checkout, initialization, operations, utils
-
-
-# State management - simplified from SessionManager class
-def _get_state_file() -> Path:
-    return utils.get_data_dir() / "state.json"
-
-
-def _load_state() -> Dict[str, Any]:
-    state_file = _get_state_file()
-    if not state_file.exists():
-        return {}
-
-    try:
-        with open(state_file, "r") as f:
-            content = f.read().strip()
-            return json.loads(content) if content else {}
-    except json.JSONDecodeError:
-        typer.secho("Warning: State file corrupted. Starting fresh.", fg="yellow")
-        return {}
-
-
-def _save_state(state: Dict[str, Any]):
-    state_file = _get_state_file()
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(state_file, "w") as f:
-        json.dump(state, f, indent=2)
+from .state_manager import get_session_state_manager
 
 
 def _get_repo_key() -> str:
@@ -44,21 +18,15 @@ def _get_repo_key() -> str:
 
 
 def _get_repo_sessions() -> Dict[str, Any]:
-    state = _load_state()
+    state_manager = get_session_state_manager()
     repo_key = _get_repo_key()
-    return state.get(repo_key, {})
+    return state_manager.get_scoped_data(repo_key)
 
 
 def _update_repo_sessions(sessions: Dict[str, Any]):
-    state = _load_state()
+    state_manager = get_session_state_manager()
     repo_key = _get_repo_key()
-
-    if sessions:
-        state[repo_key] = sessions
-    else:
-        state.pop(repo_key, None)  # Remove empty repo entries
-
-    _save_state(state)
+    state_manager.update_scoped_data(repo_key, sessions)
 
 
 # Session operations - simplified from actions.py

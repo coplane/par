@@ -1,11 +1,11 @@
-# PAR: Parallel Worktree & Session Manager
+# Par: Parallel Worktree & Session Manager
 ### *the agentic terminal multiplexer*
 
 > **AI-enhanced parallel development workflows with intelligent automation and beautiful terminal experience**
 
 `par` is a command-line tool designed to simplify parallel development within a single Git repository. It's specifically designed for working with AI coding assistants, background agents, or multiple development contexts simultaneously, `par` creates isolated workspaces that don't interfere with each other.
 
-## Why PAR?
+## Why Par?
 
 Tools like Claude Code, GitHub Copilot, and other AI coding assistants have revolutionized parallel development. PAR amplifies this by providing **isolated, AI-enhanced development environments** for each task:
 

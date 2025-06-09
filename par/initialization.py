@@ -337,7 +337,7 @@ def _get_session_contexts() -> Dict[str, Any]:
 def _get_workspace_contexts() -> Dict[str, Any]:
     """Get information about current workspace and sessions."""
     try:
-        from . import core, workspace
+        from . import core
         from pathlib import Path
         import subprocess
         

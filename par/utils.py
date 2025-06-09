@@ -4,14 +4,16 @@ import hashlib
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import typer
+
+from .constants import Config
 
 
 def run_cmd(
     command: List[str],
-    cwd: Optional[Path | str] = None,
+    cwd: Optional[Union[Path, str]] = None,
     check: bool = True,
     capture: bool = True,
     suppress_output: bool = False,
@@ -59,9 +61,9 @@ def get_data_dir() -> Path:
     """Get par's data directory."""
     xdg_data_home = os.getenv("XDG_DATA_HOME")
     if xdg_data_home:
-        data_dir = Path(xdg_data_home) / "par"
+        data_dir = Path(xdg_data_home) / Config.DATA_DIR_NAME
     else:
-        data_dir = Path.home() / ".local" / "share" / "par"
+        data_dir = Path.home() / ".local" / "share" / Config.DATA_DIR_NAME
 
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
@@ -69,32 +71,32 @@ def get_data_dir() -> Path:
 
 def _get_repo_id(repo_root: Path) -> str:
     """Generate a unique ID for the repository."""
-    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:8]
+    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:Config.REPO_ID_LENGTH]
 
 
 def get_worktree_path(repo_root: Path, label: str) -> Path:
     """Get the path for a worktree."""
     repo_id = _get_repo_id(repo_root)
-    worktrees_dir = get_data_dir() / "worktrees" / repo_id
+    worktrees_dir = get_data_dir() / Config.WORKTREES_DIR_NAME / repo_id
     worktrees_dir.mkdir(parents=True, exist_ok=True)
     return worktrees_dir / label
 
 
 def get_tmux_session_name(repo_root: Path, label: str) -> str:
     """Generate a tmux session name."""
-    repo_name = repo_root.name.lower().replace(" ", "-").replace(".", "-")[:15]
+    repo_name = repo_root.name.lower().replace(" ", "-").replace(".", "-")[:Config.SESSION_NAME_MAX_LENGTH]
     repo_id = _get_repo_id(repo_root)[:4]
-    return f"par-{repo_name}-{repo_id}-{label}"
+    return f"{Config.TMUX_SESSION_PREFIX}-{repo_name}-{repo_id}-{label}"
 
 
 def get_repo_id(repo_root: Path) -> str:  # New function
     """Generates a unique, filesystem-friendly ID for the repository."""
-    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:12]
+    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:Config.REPO_ID_FULL_LENGTH]
 
 
 def get_worktrees_base_dir() -> Path:  # New function (ensure it exists)
     """Gets the base directory for storing all par worktrees."""
-    d = get_data_dir() / "worktrees"
+    d = get_data_dir() / Config.WORKTREES_DIR_NAME
     d.mkdir(parents=True, exist_ok=True)  # Ensure it's created
     return d
 
@@ -187,3 +189,25 @@ def get_workspace_file_path(workspace_root: Path, workspace_label: str) -> Path:
     workspace_dir = get_data_dir() / "workspaces" / workspace_id / workspace_label
     workspace_dir.mkdir(parents=True, exist_ok=True)
     return workspace_dir / f"{workspace_label}.code-workspace"
+
+
+def save_vscode_workspace_file(workspace_label: str, repos_data: List[Dict]) -> Path:
+    """Save VSCode workspace file and return path."""
+    import json
+    
+    workspace_config = generate_vscode_workspace(workspace_label, repos_data)
+    
+    # Use the first repo's path to determine workspace root
+    if not repos_data:
+        raise ValueError("No repositories provided for workspace")
+    
+    first_repo_path = Path(repos_data[0]["worktree_path"])
+    # Navigate up to get workspace root: workspace_dir/repo_name/branch -> workspace_dir/../..
+    workspace_root = first_repo_path.parent.parent.parent.parent
+    
+    workspace_file = get_workspace_file_path(workspace_root, workspace_label)
+    
+    with open(workspace_file, 'w') as f:
+        json.dump(workspace_config, f, indent=2)
+    
+    return workspace_file

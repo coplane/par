@@ -1,14 +1,13 @@
 """Workspace branch renaming functionality."""
 
-import json
-import subprocess
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import typer
 from rich.console import Console
 
-from . import operations, utils
+from . import operations
+from .state_manager import get_workspace_state_manager
 
 
 def rename_repo_branch(repo_name: str, new_branch: str) -> None:
@@ -89,14 +88,14 @@ def rename_repo_branch(repo_name: str, new_branch: str) -> None:
         typer.secho(f"Error renaming git branch: {e}", fg="red", err=True)
         raise typer.Exit(1)
     
-    # Update PAR's workspace state
+    # Update Par's workspace state
     try:
         _update_workspace_state(workspace_label, workspace_data, repo_name, new_branch)
-        console.print(f"[green]✅ Updated PAR workspace state[/green]")
+        console.print(f"[green]✅ Updated Par workspace state[/green]")
         
     except Exception as e:
         typer.secho(f"Error updating workspace state: {e}", fg="red", err=True)
-        typer.secho("The git branch was renamed, but PAR's state may be inconsistent.", fg="yellow")
+        typer.secho("The git branch was renamed, but Par's state may be inconsistent.", fg="yellow")
         raise typer.Exit(1)
     
     console.print()
@@ -104,19 +103,15 @@ def rename_repo_branch(repo_name: str, new_branch: str) -> None:
     console.print(f"Repository '[cyan]{repo_name}[/cyan]' is now on branch '[green]{new_branch}[/green]'")
 
 
-def _find_current_workspace() -> tuple[str, Dict[str, Any]] | None:
+def _find_current_workspace() -> Optional[tuple[str, Dict[str, Any]]]:
     """Find the current workspace based on the current directory."""
     current_dir = Path.cwd()
     current_path_str = str(current_dir.resolve())
     
-    # Load workspace state
-    state_file = utils.get_data_dir() / "workspaces.json"
-    if not state_file.exists():
-        return None
+    state_manager = get_workspace_state_manager()
     
     try:
-        with open(state_file, "r") as f:
-            all_workspaces = json.loads(f.read().strip() or "{}")
+        all_workspaces = state_manager.load()
         
         # Check if current directory is within any workspace
         for workspace_root, workspace_data in all_workspaces.items():
@@ -135,10 +130,8 @@ def _find_current_workspace() -> tuple[str, Dict[str, Any]] | None:
 
 def _update_workspace_state(workspace_label: str, workspace_data: Dict[str, Any], repo_name: str, new_branch: str) -> None:
     """Update the workspace state with the new branch name."""
-    # Load current state
-    state_file = utils.get_data_dir() / "workspaces.json"
-    with open(state_file, "r") as f:
-        all_workspaces = json.loads(f.read().strip() or "{}")
+    state_manager = get_workspace_state_manager()
+    all_workspaces = state_manager.load()
     
     # Find and update the specific repo's branch name
     workspace_root = workspace_data["workspace_root"]
@@ -148,5 +141,4 @@ def _update_workspace_state(workspace_label: str, workspace_data: Dict[str, Any]
             break
     
     # Save updated state
-    with open(state_file, "w") as f:
-        json.dump(all_workspaces, f, indent=2)
+    state_manager.save(all_workspaces)
