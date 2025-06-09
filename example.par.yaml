@@ -3,30 +3,25 @@
 
 initialization:
   commands:
-    # Example: Install frontend dependencies in the frontend/ directory
+    # Example: Install frontend dependencies
     - name: "Install frontend dependencies"
-      command: "pnpm install"
-      working_directory: "frontend"
+      command: "cd frontend && pnpm install"
 
-    # Example: Setup environment file in frontend/ directory
+    # Example: Setup environment file in frontend directory
     - name: "Setup environment file"
-      command: "echo 'VITE_API_URL=http://localhost:3000' > .env"
-      working_directory: "frontend"
+      command: "cd frontend && echo 'VITE_API_URL=http://localhost:3000' > .env"
 
-    # Example: Install backend dependencies in the backend/ directory
+    # Example: Install backend dependencies
     - name: "Install backend dependencies"
-      command: "uv sync"
-      working_directory: "backend"
+      command: "cd backend && uv sync"
     
-    # Example: Run a global command (no working_directory specified)
+    # Example: Run a command from repository root
     - name: "Show repository status"
       command: "git status"
 
-    # Example: Command with condition
-    - name: "Build frontend if package.json exists"
-      command: "npm run build"
-      working_directory: "frontend"
-      condition: "file_exists:frontend/package.json"
+    # Example: Build frontend
+    - name: "Build frontend"
+      command: "cd frontend && npm run build"
 
-# Note: The working_directory is relative to the worktree root
-# Commands without working_directory run in the worktree root
+# Note: All commands start from the worktree root directory
+# Use 'cd <directory> &&' to run commands in subdirectories
