@@ -1,6 +1,5 @@
 """Initialization support for .par.yaml configuration files."""
 
-import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -48,25 +47,15 @@ def run_initialization(
             # Simple string command
             command = command_config
             name = f"Command {i + 1}"
-            working_directory = None
         elif isinstance(command_config, dict):
-            # Structured command with name, optional condition, and working_directory
+            # Structured command with name
             command = command_config.get("command")
             name = command_config.get("name", f"Command {i + 1}")
-            condition = command_config.get("condition")
-            working_directory = command_config.get("working_directory")
 
             if not command:
                 typer.secho(
                     f"Warning: Skipping command {i + 1}: no 'command' specified",
                     fg="yellow",
-                )
-                continue
-
-            # Check condition if specified
-            if condition and not _check_condition(condition, worktree_path):
-                console.print(
-                    f"[dim]Skipping '{name}': condition '{condition}' not met[/dim]"
                 )
                 continue
         else:
@@ -76,16 +65,10 @@ def run_initialization(
             continue
 
         console.print(f"[green]Running:[/green] {name}")
+        console.print(f"[dim]  Command: {command}[/dim]")
 
-        # Handle working directory
-        if working_directory:
-            # Change to the specified directory before running command
-            full_command = f"cd {working_directory} && {command}"
-            console.print(f"[dim]  Working directory: {working_directory}[/dim]")
-            console.print(f"[dim]  Command: {command}[/dim]")
-        else:
-            full_command = command
-            console.print(f"[dim]  Command: {command}[/dim]")
+        # Always cd to worktree root first to ensure consistent starting point
+        full_command = f"cd {worktree_path} && {command}"
 
         try:
             operations.send_tmux_keys(session_name, full_command)
@@ -96,27 +79,3 @@ def run_initialization(
     console.print(
         f"[green]✅ Initialization complete for session '{session_name}'[/green]"
     )
-
-
-def _check_condition(condition: str, worktree_path: Path) -> bool:
-    """Check if a condition is met. Returns True if condition passes."""
-    if condition.startswith("directory_exists:"):
-        directory = condition.split(":", 1)[1]
-        # Make path relative to worktree if not absolute
-        path = Path(directory)
-        if not path.is_absolute():
-            path = worktree_path / directory
-        return path.is_dir()
-    elif condition.startswith("file_exists:"):
-        file_path = condition.split(":", 1)[1]
-        # Make path relative to worktree if not absolute
-        path = Path(file_path)
-        if not path.is_absolute():
-            path = worktree_path / file_path
-        return path.is_file()
-    elif condition.startswith("env:"):
-        env_var = condition.split(":", 1)[1]
-        return os.getenv(env_var) is not None
-    else:
-        typer.secho(f"Warning: Unknown condition type: {condition}", fg="yellow")
-        return True  # Default to running the command if condition is unknown
