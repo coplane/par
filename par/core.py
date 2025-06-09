@@ -61,7 +61,7 @@ def _update_repo_sessions(sessions: Dict[str, Any]):
 
 
 # Session operations - simplified from actions.py
-def start_session(label: str):
+def start_session(label: str, open_session: bool = False):
     """Start a new git worktree and tmux session."""
     sessions = _get_repo_sessions()
 
@@ -108,7 +108,12 @@ def start_session(label: str):
     typer.echo(f"  Worktree: {worktree_path}")
     typer.echo(f"  Branch: {label}")
     typer.echo(f"  Session: {session_name}")
-    typer.echo(f"To open: par open {label}")
+    
+    if open_session:
+        typer.echo("Opening session...")
+        operations.open_tmux_session(session_name)
+    else:
+        typer.echo(f"To open: par open {label}")
 
 
 def remove_session(label: str):
