@@ -89,8 +89,8 @@ def test_run_initialization_structured_commands(mock_send_keys):
 
 
 @patch("par.initialization.operations.send_tmux_keys")
-def test_run_initialization_no_conditions_support(mock_send_keys):
-    """Test that conditions are no longer supported."""
+def test_run_initialization(mock_send_keys):
+    """Test initialization with multiple commands."""
     config = {
         "initialization": {
             "commands": [
@@ -152,38 +152,4 @@ def test_run_initialization_invalid_command_config(mock_send_keys):
     assert mock_send_keys.call_count == 2
     mock_send_keys.assert_any_call(
         "test-session", "cd /tmp/test-worktree && valid command"
-    )
-
-
-@patch("par.initialization.operations.send_tmux_keys")
-def test_run_initialization_no_working_directory_support(mock_send_keys):
-    """Test that working_directory is no longer supported."""
-    config = {
-        "initialization": {
-            "commands": [
-                {
-                    "name": "Install frontend deps",
-                    "command": "cd frontend && pnpm install",
-                },
-                {
-                    "name": "Install backend deps",
-                    "command": "cd backend && uv sync",
-                },
-                "echo 'global command'",  # No cd needed
-            ]
-        }
-    }
-
-    worktree_path = Path("/tmp/test-worktree")
-    initialization.run_initialization(config, "test-session", worktree_path)
-
-    assert mock_send_keys.call_count == 3
-    mock_send_keys.assert_any_call(
-        "test-session", "cd /tmp/test-worktree && cd frontend && pnpm install"
-    )
-    mock_send_keys.assert_any_call(
-        "test-session", "cd /tmp/test-worktree && cd backend && uv sync"
-    )
-    mock_send_keys.assert_any_call(
-        "test-session", "cd /tmp/test-worktree && echo 'global command'"
     )

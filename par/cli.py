@@ -72,12 +72,18 @@ def start(
             help="A unique label for the new worktree, branch, and tmux session."
         ),
     ],
+    open_session: Annotated[
+        bool,
+        typer.Option(
+            "--open", help="Automatically open/attach to the session after creation."
+        ),
+    ] = False,
 ):
     """
     Start a new git worktree and tmux session.
     Creates a worktree, a git branch (both named <label>), and a tmux session.
     """
-    core.start_session(label)
+    core.start_session(label, open_session=open_session)
 
 
 def get_session_labels_with_all() -> List[str]:
