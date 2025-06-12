@@ -226,7 +226,7 @@ def start_workspace_session(
     _display_workspace_created(label, repos_data, session_name)
 
     # Send welcome message to tmux session
-    operations.send_tmux_keys(session_name, "par welcome")
+    operations.send_tmux_keys(session_name, "par")
 
     # Mark workspace as ready
     _update_workspace_status(

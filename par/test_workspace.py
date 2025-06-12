@@ -352,9 +352,7 @@ class TestWorkspaceOperations:
         mock_run_init.assert_called_once()
         mock_update_state.assert_called_once()
         mock_display.assert_called_once()
-        mock_send_keys.assert_called_with(
-            "par-ws-workspace-abc1-feature-auth", "par welcome"
-        )
+        mock_send_keys.assert_called_with("par-ws-workspace-abc1-feature-auth", "par")
 
     @patch("par.workspace._prepare_workspace_repos")
     @patch("par.workspace._validate_workspace_creation")

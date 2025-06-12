@@ -94,7 +94,7 @@ def start_session(label: str, open_session: bool = False):
     typer.echo(f"  Session: {session_name}")
 
     # Send welcome message to tmux session
-    operations.send_tmux_keys(session_name, "par welcome")
+    operations.send_tmux_keys(session_name, "par")
 
     # Mark session as ready
     _update_session_status(

@@ -371,16 +371,6 @@ def cursor():
 
 
 @app.command()
-def welcome():
-    """
-    Show welcome message with current development contexts and suggested next steps.
-    """
-    from . import initialization
-
-    initialization.show_welcome_message(workspace_mode=True)
-
-
-@app.command()
 def rename(
     repo_name: Annotated[
         str, typer.Argument(help="Repository name to rename branch for")
