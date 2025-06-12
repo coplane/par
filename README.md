@@ -27,7 +27,7 @@ https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
 ```bash
 par                       # See your current context and available commands
 par start feature-auth --open    # Creates worktree, branch, and tmux session
-par claude --agent        # Start Claude in autonomous agent mode
+par code                 # Open workspace in VSCode
 par cursor               # Open workspace in Cursor IDE
 ```
 
@@ -65,8 +65,7 @@ par cursor                                           # Open entire workspace in 
 
 ```bash
 par                       # Beautiful welcome with current context
-par claude --agent        # Claude with bypass permissions (autonomous mode)
-par claude               # Claude in regular mode
+par code                 # Open current workspace/repo in VSCode
 par cursor               # Open current workspace/repo in Cursor
 ```
 
@@ -85,7 +84,6 @@ par cursor               # Open current workspace/repo in Cursor
 - `par ls` - See all your development contexts (sessions + workspaces) in one table
 - `par open <label>` - Switch to any session or workspace
 - `par control-center` - View all contexts in a tiled tmux layout
-- `par claude --agent` - AI assistance available everywhere
 - Tab completion works across both sessions and workspaces
 
 ### AI Integration Everywhere:

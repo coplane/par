@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import initialization, operations, utils
+from .constants import SessionStatus
 from .state_manager import get_workspace_state_manager
 
 
@@ -27,6 +28,24 @@ def _update_workspace_sessions(workspace_root: Path, sessions: Dict[str, Any]):
     state_manager = get_workspace_state_manager()
     workspace_key = _get_workspace_key(workspace_root)
     state_manager.update_scoped_data(workspace_key, sessions)
+
+
+def _update_workspace_status(
+    label: str,
+    status: str,
+    workspace_root: Optional[Path] = None,
+    initialized_at: Optional[str] = None,
+):
+    """Update the status of a specific workspace."""
+    if workspace_root is None:
+        workspace_root = Path.cwd()
+
+    workspace_sessions = _get_workspace_sessions(workspace_root)
+    if label in workspace_sessions:
+        workspace_sessions[label]["status"] = status
+        if initialized_at:
+            workspace_sessions[label]["initialized_at"] = initialized_at
+        _update_workspace_sessions(workspace_root, workspace_sessions)
 
 
 # Workspace operations helpers
@@ -157,6 +176,8 @@ def _update_workspace_state(
         "repos": repos_data,
         "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
         "workspace_root": str(workspace_root),
+        "status": SessionStatus.INITIALIZING,
+        "initialized_at": None,
     }
     _update_workspace_sessions(workspace_root, workspace_sessions)
 
@@ -206,6 +227,14 @@ def start_workspace_session(
 
     # Send welcome message to tmux session
     operations.send_tmux_keys(session_name, "par welcome")
+
+    # Mark workspace as ready
+    _update_workspace_status(
+        label,
+        SessionStatus.READY,
+        current_dir,
+        datetime.datetime.now(datetime.UTC).isoformat(),
+    )
 
     if open_session:
         open_workspace_session(label)

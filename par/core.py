@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import checkout, initialization, operations, utils
+from .constants import SessionStatus
 from .state_manager import get_session_state_manager
 
 
@@ -27,6 +28,18 @@ def _update_repo_sessions(sessions: Dict[str, Any]):
     state_manager = get_session_state_manager()
     repo_key = _get_repo_key()
     state_manager.update_scoped_data(repo_key, sessions)
+
+
+def _update_session_status(
+    label: str, status: str, initialized_at: Optional[str] = None
+):
+    """Update the status of a specific session."""
+    sessions = _get_repo_sessions()
+    if label in sessions:
+        sessions[label]["status"] = status
+        if initialized_at:
+            sessions[label]["initialized_at"] = initialized_at
+        _update_repo_sessions(sessions)
 
 
 # Session operations - simplified from actions.py
@@ -62,12 +75,14 @@ def start_session(label: str, open_session: bool = False):
     if config:
         initialization.run_initialization(config, session_name, worktree_path)
 
-    # Update state
+    # Update state with status
     sessions[label] = {
         "worktree_path": str(worktree_path),
         "tmux_session_name": session_name,
         "branch_name": label,
         "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        "status": SessionStatus.INITIALIZING,
+        "initialized_at": None,
     }
     _update_repo_sessions(sessions)
 
@@ -80,6 +95,11 @@ def start_session(label: str, open_session: bool = False):
 
     # Send welcome message to tmux session
     operations.send_tmux_keys(session_name, "par welcome")
+
+    # Mark session as ready
+    _update_session_status(
+        label, SessionStatus.READY, datetime.datetime.now(datetime.UTC).isoformat()
+    )
 
     if open_session:
         typer.echo("Opening session...")
@@ -158,8 +178,51 @@ def remove_all_sessions():
 
 
 def send_command(target: str, command: str):
-    """Send a command to session(s)."""
-    sessions = _get_repo_sessions()
+    """Send a command to session(s) or workspace(s)."""
+
+    # First check if it's a workspace (search ALL workspaces, not just current dir)
+    workspace_found = False
+    if target.lower() != "all":
+        # Search all workspaces across all directories
+        state_file = utils.get_data_dir() / "workspaces.json"
+        if state_file.exists():
+            try:
+                import json
+
+                with open(state_file, "r") as f:
+                    all_workspaces = json.loads(f.read().strip() or "{}")
+
+                # Search through all workspace directories
+                for workspace_root, workspace_data in all_workspaces.items():
+                    if target in workspace_data:
+                        ws_info = workspace_data[target]
+                        session_name = ws_info["session_name"]
+                        typer.echo(f"Sending to workspace '{target}'...")
+                        operations.send_tmux_keys(session_name, command)
+                        typer.secho(
+                            f"Sent command to workspace session '{session_name}'",
+                            fg="green",
+                        )
+                        workspace_found = True
+                        break
+            except Exception:
+                # Continue to single-repo logic if workspace search fails
+                pass
+
+    if workspace_found:
+        return
+
+    # Handle single-repo sessions (requires being in a git repo)
+    try:
+        sessions = _get_repo_sessions()
+    except Exception:
+        # Not in a git repo and no workspace found
+        typer.secho(
+            f"Error: Target '{target}' not found. Not in a git repository and no matching workspace found.",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     if target.lower() == "all":
         if not sessions:
@@ -173,12 +236,15 @@ def send_command(target: str, command: str):
     else:
         session_data = sessions.get(target)
         if not session_data:
-            typer.secho(f"Error: Session '{target}' not found.", fg="red", err=True)
+            typer.secho(
+                f"Error: Session or workspace '{target}' not found.", fg="red", err=True
+            )
             raise typer.Exit(1)
 
         session_name = session_data["tmux_session_name"]
         typer.echo(f"Sending to '{target}'...")
         operations.send_tmux_keys(session_name, command)
+        typer.secho(f"Sent command to session '{session_name}'", fg="green")
 
 
 def list_sessions():

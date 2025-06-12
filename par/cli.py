@@ -1,4 +1,5 @@
 # src/par/cli.py
+import subprocess
 from typing import List, Optional
 
 import typer
@@ -65,6 +66,7 @@ def main_callback(
     if ctx.invoked_subcommand is None:
         # No subcommand provided, show welcome message
         from . import initialization
+
         initialization.show_welcome_message(workspace_mode=True)
 
 
@@ -173,8 +175,8 @@ def checkout(
     core.checkout_session(target, label)
 
 
-@app.command()
-def open(
+@app.command(name="open")
+def open_session(
     label: Annotated[
         str,
         typer.Argument(
@@ -200,34 +202,84 @@ def control_center():
 
 
 @app.command()
-def claude(
-    agent: Annotated[
-        bool,
-        typer.Option(
-            "--agent",
-            help="Start Claude in AI agent mode with bypass permissions for development assistance.",
-        ),
-    ] = False,
-):
+def code():
     """
-    Start Claude AI development companion.
+    Open current workspace or repository in VSCode.
     """
-    if agent:
-        typer.secho("Starting Claude in agent mode with bypass permissions...", fg="cyan")
+    import json
+    from pathlib import Path
+
+    from . import utils, workspace
+
+    try:
+        current_dir = Path.cwd()
+
+        # First check if we're in a workspace by looking at the workspaces.json
+        state_file = core.utils.get_data_dir() / "workspaces.json"
+        if state_file.exists():
+            with open(state_file, "r") as f:
+                all_workspaces = json.loads(f.read().strip() or "{}")
+
+            current_path_str = str(current_dir.resolve())
+
+            # Check all workspaces to see if we're inside one
+            for workspace_root, workspace_data in all_workspaces.items():
+                for ws_label, ws_info in workspace_data.items():
+                    # Check if we're inside any of this workspace's worktree paths
+                    for repo_data in ws_info.get("repos", []):
+                        worktree_path = repo_data.get("worktree_path", "")
+                        if worktree_path:
+                            worktree_parent = str(Path(worktree_path).parent.parent)
+                            # Check if current path is within the workspace directory structure
+                            if (
+                                current_path_str.startswith(worktree_parent)
+                                or current_path_str == worktree_parent
+                            ):
+                                # We're in a workspace directory
+                                typer.secho(
+                                    f"Opening workspace '{ws_label}' in VSCode...",
+                                    fg="green",
+                                )
+                                workspace_file = utils.save_vscode_workspace_file(
+                                    ws_label, ws_info["repos"]
+                                )
+                                operations.run_cmd(["code", str(workspace_file)])
+                                return
+
+        # Not in a workspace directory, try regular git repository
         try:
-            operations.run_cmd(["claude", "--dangerously-skip-permissions"])
-        except Exception as e:
-            typer.secho(f"Error starting Claude agent: {e}", fg="red", err=True)
-            typer.echo("Make sure Claude CLI is installed and in your PATH.")
+            current_repo_root = core.utils.get_git_repo_root()
+            current_dir = current_repo_root.parent
+            workspace_sessions = workspace._get_workspace_sessions(current_dir)
+
+            if workspace_sessions:
+                # If there are workspaces, open the first one
+                first_workspace = next(iter(workspace_sessions.items()))
+                workspace_label = first_workspace[0]
+                typer.secho(
+                    f"Opening workspace '{workspace_label}' in VSCode...", fg="green"
+                )
+                workspace.open_workspace_in_ide(workspace_label, "code")
+            else:
+                # No workspace, just open the current repository
+                typer.secho("Opening current repository in VSCode...", fg="green")
+                operations.run_cmd(["code", str(current_repo_root)])
+        except (subprocess.CalledProcessError, typer.Exit):
+            # Not in a git repository and not in a workspace
+            typer.secho(
+                "Error: Not in a git repository or Par workspace.", fg="red", err=True
+            )
+            typer.secho(
+                "Please run par code from within a git repository or Par workspace.",
+                fg="red",
+                err=True,
+            )
             raise typer.Exit(1)
-    else:
-        typer.secho("Starting Claude in regular mode...", fg="cyan")
-        try:
-            operations.run_cmd(["claude"])
-        except Exception as e:
-            typer.secho(f"Error starting Claude: {e}", fg="red", err=True)
-            typer.echo("Make sure Claude CLI is installed and in your PATH.")
-            raise typer.Exit(1)
+
+    except Exception as e:
+        typer.secho(f"Error opening VSCode: {e}", fg="red", err=True)
+        typer.echo("Make sure VSCode is installed and 'code' command is in your PATH.")
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -235,24 +287,76 @@ def cursor():
     """
     Open current workspace or repository in Cursor IDE.
     """
-    from . import workspace
-    
+    import json
+    from pathlib import Path
+
+    from . import utils, workspace
+
     try:
-        current_repo_root = core.utils.get_git_repo_root()
-        current_dir = current_repo_root.parent
-        workspace_sessions = workspace._get_workspace_sessions(current_dir)
-        
-        if workspace_sessions:
-            # If there are workspaces, open the first one
-            first_workspace = next(iter(workspace_sessions.items()))
-            workspace_label = first_workspace[0]
-            typer.secho(f"Opening workspace '{workspace_label}' in Cursor...", fg="green")
-            workspace.open_workspace_in_ide(workspace_label, "cursor")
-        else:
-            # No workspace, just open the current repository
-            typer.secho("Opening current repository in Cursor...", fg="green")
-            operations.run_cmd(["cursor", str(current_repo_root)])
-            
+        current_dir = Path.cwd()
+
+        # First check if we're in a workspace by looking at the workspaces.json
+        state_file = core.utils.get_data_dir() / "workspaces.json"
+        if state_file.exists():
+            with open(state_file, "r") as f:
+                all_workspaces = json.loads(f.read().strip() or "{}")
+
+            current_path_str = str(current_dir.resolve())
+
+            # Check all workspaces to see if we're inside one
+            for workspace_root, workspace_data in all_workspaces.items():
+                for ws_label, ws_info in workspace_data.items():
+                    # Check if we're inside any of this workspace's worktree paths
+                    for repo_data in ws_info.get("repos", []):
+                        worktree_path = repo_data.get("worktree_path", "")
+                        if worktree_path:
+                            worktree_parent = str(Path(worktree_path).parent.parent)
+                            # Check if current path is within the workspace directory structure
+                            if (
+                                current_path_str.startswith(worktree_parent)
+                                or current_path_str == worktree_parent
+                            ):
+                                # We're in a workspace directory
+                                typer.secho(
+                                    f"Opening workspace '{ws_label}' in Cursor...",
+                                    fg="green",
+                                )
+                                workspace_file = utils.save_vscode_workspace_file(
+                                    ws_label, ws_info["repos"]
+                                )
+                                operations.run_cmd(["cursor", str(workspace_file)])
+                                return
+
+        # Not in a workspace directory, try regular git repository
+        try:
+            current_repo_root = core.utils.get_git_repo_root()
+            current_dir = current_repo_root.parent
+            workspace_sessions = workspace._get_workspace_sessions(current_dir)
+
+            if workspace_sessions:
+                # If there are workspaces, open the first one
+                first_workspace = next(iter(workspace_sessions.items()))
+                workspace_label = first_workspace[0]
+                typer.secho(
+                    f"Opening workspace '{workspace_label}' in Cursor...", fg="green"
+                )
+                workspace.open_workspace_in_ide(workspace_label, "cursor")
+            else:
+                # No workspace, just open the current repository
+                typer.secho("Opening current repository in Cursor...", fg="green")
+                operations.run_cmd(["cursor", str(current_repo_root)])
+        except (subprocess.CalledProcessError, typer.Exit):
+            # Not in a git repository and not in a workspace
+            typer.secho(
+                "Error: Not in a git repository or Par workspace.", fg="red", err=True
+            )
+            typer.secho(
+                "Please run par cursor from within a git repository or Par workspace.",
+                fg="red",
+                err=True,
+            )
+            raise typer.Exit(1)
+
     except Exception as e:
         typer.secho(f"Error opening Cursor: {e}", fg="red", err=True)
         typer.echo("Make sure Cursor is installed and in your PATH.")
@@ -265,12 +369,15 @@ def welcome():
     Show welcome message with current development contexts and suggested next steps.
     """
     from . import initialization
+
     initialization.show_welcome_message(workspace_mode=True)
 
 
 @app.command()
 def rename(
-    repo_name: Annotated[str, typer.Argument(help="Repository name to rename branch for")],
+    repo_name: Annotated[
+        str, typer.Argument(help="Repository name to rename branch for")
+    ],
     new_branch: Annotated[str, typer.Argument(help="New branch name")],
 ):
     """
@@ -279,6 +386,7 @@ def rename(
     """
     try:
         from . import workspace_rename
+
         workspace_rename.rename_repo_branch(repo_name, new_branch)
     except Exception as e:
         typer.secho(f"Error renaming branch: {e}", fg="red", err=True)

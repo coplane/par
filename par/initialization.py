@@ -135,7 +135,7 @@ def show_welcome_message(workspace_mode: bool = False) -> None:
                 console.print()
                 console.print("⚡ [bold yellow]Workspace Commands:[/bold yellow]")
                 console.print(
-                    "  [bright_blue]par claude --agent[/bright_blue]    # AI agent mode"
+                    "  [bright_blue]par code[/bright_blue]             # Open in VSCode"
                 )
                 console.print(
                     "  [bright_blue]par cursor[/bright_blue]           # Open in Cursor"
