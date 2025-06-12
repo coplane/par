@@ -1,7 +1,6 @@
 """Core business logic for par - simplified from actions.py and manager.py"""
 
 import datetime
-import json
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -11,32 +10,8 @@ from rich.console import Console
 from rich.table import Table
 
 from . import checkout, initialization, operations, utils
-
-
-# State management - simplified from SessionManager class
-def _get_state_file() -> Path:
-    return utils.get_data_dir() / "state.json"
-
-
-def _load_state() -> Dict[str, Any]:
-    state_file = _get_state_file()
-    if not state_file.exists():
-        return {}
-
-    try:
-        with open(state_file, "r") as f:
-            content = f.read().strip()
-            return json.loads(content) if content else {}
-    except json.JSONDecodeError:
-        typer.secho("Warning: State file corrupted. Starting fresh.", fg="yellow")
-        return {}
-
-
-def _save_state(state: Dict[str, Any]):
-    state_file = _get_state_file()
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(state_file, "w") as f:
-        json.dump(state, f, indent=2)
+from .constants import SessionStatus
+from .state_manager import get_session_state_manager
 
 
 def _get_repo_key() -> str:
@@ -44,21 +19,27 @@ def _get_repo_key() -> str:
 
 
 def _get_repo_sessions() -> Dict[str, Any]:
-    state = _load_state()
+    state_manager = get_session_state_manager()
     repo_key = _get_repo_key()
-    return state.get(repo_key, {})
+    return state_manager.get_scoped_data(repo_key)
 
 
 def _update_repo_sessions(sessions: Dict[str, Any]):
-    state = _load_state()
+    state_manager = get_session_state_manager()
     repo_key = _get_repo_key()
+    state_manager.update_scoped_data(repo_key, sessions)
 
-    if sessions:
-        state[repo_key] = sessions
-    else:
-        state.pop(repo_key, None)  # Remove empty repo entries
 
-    _save_state(state)
+def _update_session_status(
+    label: str, status: str, initialized_at: Optional[str] = None
+):
+    """Update the status of a specific session."""
+    sessions = _get_repo_sessions()
+    if label in sessions:
+        sessions[label]["status"] = status
+        if initialized_at:
+            sessions[label]["initialized_at"] = initialized_at
+        _update_repo_sessions(sessions)
 
 
 # Session operations - simplified from actions.py
@@ -94,12 +75,14 @@ def start_session(label: str, open_session: bool = False):
     if config:
         initialization.run_initialization(config, session_name, worktree_path)
 
-    # Update state
+    # Update state with status
     sessions[label] = {
         "worktree_path": str(worktree_path),
         "tmux_session_name": session_name,
         "branch_name": label,
-        "created_at": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        "status": SessionStatus.INITIALIZING,
+        "initialized_at": None,
     }
     _update_repo_sessions(sessions)
 
@@ -109,6 +92,17 @@ def start_session(label: str, open_session: bool = False):
     typer.echo(f"  Worktree: {worktree_path}")
     typer.echo(f"  Branch: {label}")
     typer.echo(f"  Session: {session_name}")
+
+    # Change to worktree directory first
+    operations.send_tmux_keys(session_name, f"cd {worktree_path}")
+
+    # Send welcome message to tmux session
+    operations.send_tmux_keys(session_name, "par")
+
+    # Mark session as ready
+    _update_session_status(
+        label, SessionStatus.READY, datetime.datetime.now(datetime.UTC).isoformat()
+    )
 
     if open_session:
         typer.echo("Opening session...")
@@ -187,8 +181,51 @@ def remove_all_sessions():
 
 
 def send_command(target: str, command: str):
-    """Send a command to session(s)."""
-    sessions = _get_repo_sessions()
+    """Send a command to session(s) or workspace(s)."""
+
+    # First check if it's a workspace (search ALL workspaces, not just current dir)
+    workspace_found = False
+    if target.lower() != "all":
+        # Search all workspaces across all directories
+        state_file = utils.get_data_dir() / "workspaces.json"
+        if state_file.exists():
+            try:
+                import json
+
+                with open(state_file, "r") as f:
+                    all_workspaces = json.loads(f.read().strip() or "{}")
+
+                # Search through all workspace directories
+                for workspace_root, workspace_data in all_workspaces.items():
+                    if target in workspace_data:
+                        ws_info = workspace_data[target]
+                        session_name = ws_info["session_name"]
+                        typer.echo(f"Sending to workspace '{target}'...")
+                        operations.send_tmux_keys(session_name, command)
+                        typer.secho(
+                            f"Sent command to workspace session '{session_name}'",
+                            fg="green",
+                        )
+                        workspace_found = True
+                        break
+            except Exception:
+                # Continue to single-repo logic if workspace search fails
+                pass
+
+    if workspace_found:
+        return
+
+    # Handle single-repo sessions (requires being in a git repo)
+    try:
+        sessions = _get_repo_sessions()
+    except Exception:
+        # Not in a git repo and no workspace found
+        typer.secho(
+            f"Error: Target '{target}' not found. Not in a git repository and no matching workspace found.",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     if target.lower() == "all":
         if not sessions:
@@ -202,42 +239,75 @@ def send_command(target: str, command: str):
     else:
         session_data = sessions.get(target)
         if not session_data:
-            typer.secho(f"Error: Session '{target}' not found.", fg="red", err=True)
+            typer.secho(
+                f"Error: Session or workspace '{target}' not found.", fg="red", err=True
+            )
             raise typer.Exit(1)
 
         session_name = session_data["tmux_session_name"]
         typer.echo(f"Sending to '{target}'...")
         operations.send_tmux_keys(session_name, command)
+        typer.secho(f"Sent command to session '{session_name}'", fg="green")
 
 
 def list_sessions():
-    """List all sessions and workspaces for the current repository."""
+    """List all sessions and workspaces for the current location."""
+    from pathlib import Path
+
     from . import workspace
 
-    sessions = _get_repo_sessions()
-    current_repo_root = utils.get_git_repo_root()
-    current_repo_name = current_repo_root.name
+    current_dir = Path.cwd()
 
-    # Get workspaces that contain this repository
+    # Try to get current repo info if we're in a git repo
+    current_repo_root = utils.try_get_git_repo_root()
+    if current_repo_root:
+        current_repo_name = current_repo_root.name
+        sessions = _get_repo_sessions()
+    else:
+        # Not in a git repo, that's OK for workspaces
+        current_repo_name = None
+        sessions = {}
+
+    # Get workspaces - check parent directory if we're in a git repo
+    if current_repo_root:
+        # When in a git repo, check parent directory for workspaces
+        workspace_dir = current_repo_root.parent
+    else:
+        # When not in a git repo, use current directory
+        workspace_dir = current_dir
+
+    workspace_sessions = workspace._get_workspace_sessions(workspace_dir)
+
+    # If we're in a git repo, filter workspaces to show only relevant ones
     relevant_workspaces = []
-    current_dir = current_repo_root.parent  # Go up to find workspace directories
-    workspace_sessions = workspace._get_workspace_sessions(current_dir)
-
-    for ws_label, ws_data in workspace_sessions.items():
-        # Check if this workspace contains the current repository
-        for repo_data in ws_data.get("repos", []):
-            if repo_data["repo_name"] == current_repo_name:
-                relevant_workspaces.append((ws_label, ws_data, repo_data))
-                break
+    if current_repo_name:
+        for ws_label, ws_data in workspace_sessions.items():
+            # Check if this workspace contains the current repository
+            for repo_data in ws_data.get("repos", []):
+                if repo_data["repo_name"] == current_repo_name:
+                    relevant_workspaces.append((ws_label, ws_data, repo_data))
+                    break
+    else:
+        # Not in a git repo - show all workspaces for current directory
+        for ws_label, ws_data in workspace_sessions.items():
+            # Use first repo data for display
+            repo_data = ws_data.get("repos", [{}])[0] if ws_data.get("repos") else {}
+            relevant_workspaces.append((ws_label, ws_data, repo_data))
 
     if not sessions and not relevant_workspaces:
-        typer.secho(
-            "No active sessions or workspaces for this repository.", fg="yellow"
-        )
+        if current_repo_name:
+            typer.secho(
+                "No active sessions or workspaces for this repository.", fg="yellow"
+            )
+        else:
+            typer.secho("No active workspaces in this directory.", fg="yellow")
         return
 
     console = Console()
-    table = Table(title=f"Par Development Contexts for {current_repo_name}")
+    if current_repo_name:
+        table = Table(title=f"Par Development Contexts for {current_repo_name}")
+    else:
+        table = Table(title="Par Workspaces")
     table.add_column("Label", style="cyan", no_wrap=True)
     table.add_column("Type", style="bold blue", no_wrap=True)
     table.add_column("Tmux Session", style="magenta")
@@ -267,18 +337,23 @@ def list_sessions():
         )
 
         # Get other repos in this workspace
-        other_repos = [
-            r["repo_name"]
-            for r in ws_data.get("repos", [])
-            if r["repo_name"] != current_repo_name
-        ]
-        other_repos_str = ", ".join(other_repos) if other_repos else "-"
+        if current_repo_name:
+            other_repos = [
+                r["repo_name"]
+                for r in ws_data.get("repos", [])
+                if r["repo_name"] != current_repo_name
+            ]
+            other_repos_str = ", ".join(other_repos) if other_repos else "-"
+        else:
+            # Show all repos when not in a git repo
+            all_repos = [r["repo_name"] for r in ws_data.get("repos", [])]
+            other_repos_str = ", ".join(all_repos) if all_repos else "-"
 
         table.add_row(
             ws_label,
             "Workspace",
             f"{ws_data['session_name']} ({session_active})",
-            repo_data["branch_name"],
+            repo_data.get("branch_name", ws_label),
             other_repos_str,
             ws_data["created_at"][:16],
         )
@@ -363,7 +438,7 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
         "worktree_path": str(worktree_path),
         "tmux_session_name": session_name,
         "branch_name": branch_name,
-        "created_at": datetime.datetime.utcnow().isoformat(),
+        "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
         "checkout_target": target,  # Remember original target
         "is_checkout": True,  # Mark as checkout vs start
     }

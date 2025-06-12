@@ -1,6 +1,7 @@
 """Git and tmux operations - simplified from git.py and tmux.py"""
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import List, Optional
@@ -8,7 +9,58 @@ from typing import List, Optional
 import typer
 
 from .checkout import CheckoutStrategy
+from .constants import Config, Colors, Messages
 from .utils import get_git_repo_root, run_cmd
+
+
+# Input validation utilities
+def _validate_session_name(session_name: str) -> None:
+    """Validate tmux session name to prevent injection."""
+    if not session_name:
+        raise ValueError("Session name cannot be empty")
+    
+    # Allow alphanumeric, hyphens, underscores, dots
+    if not re.match(Config.VALID_SESSION_NAME_PATTERN, session_name):
+        raise ValueError(f"Invalid session name: {session_name}. Only alphanumeric, hyphens, underscores, and dots allowed.")
+    
+    if len(session_name) > Config.MAX_SESSION_NAME_LENGTH:
+        raise ValueError(f"Session name too long: {session_name} (max {Config.MAX_SESSION_NAME_LENGTH} characters)")
+
+
+def _validate_branch_name(branch_name: str) -> None:
+    """Validate git branch name to prevent injection."""
+    if not branch_name:
+        raise ValueError("Branch name cannot be empty")
+    
+    # Git branch name rules: no spaces, no special chars that could be problematic
+    if not re.match(Config.VALID_BRANCH_NAME_PATTERN, branch_name):
+        raise ValueError(f"Invalid branch name: {branch_name}")
+    
+    if len(branch_name) > Config.MAX_BRANCH_NAME_LENGTH:
+        raise ValueError(f"Branch name too long: {branch_name} (max {Config.MAX_BRANCH_NAME_LENGTH} characters)")
+    
+    # Prevent some problematic patterns
+    for pattern in Config.FORBIDDEN_BRANCH_PATTERNS:
+        if pattern in branch_name:
+            raise ValueError(f"Branch name contains forbidden pattern '{pattern}': {branch_name}")
+
+
+def _sanitize_command(command: str) -> str:
+    """Sanitize command input for safe execution."""
+    if not command:
+        return ""
+    
+    # Limit command length
+    if len(command) > Config.MAX_COMMAND_LENGTH:
+        raise ValueError(f"Command too long (max {Config.MAX_COMMAND_LENGTH} characters)")
+    
+    # For tmux send-keys, we don't need to shell-escape since tmux handles it
+    # But we should remove any null bytes or control characters that could cause issues
+    sanitized = command
+    for char in Config.FORBIDDEN_CONTROL_CHARS:
+        sanitized = sanitized.replace(char, '')
+    
+    return sanitized
 
 
 # Tmux utilities
@@ -19,13 +71,21 @@ def _check_tmux():
             ["tmux", "has-session"], check=False, capture=True, suppress_output=True
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
-        typer.secho("Error: tmux not available or not running.", fg="red", err=True)
+        typer.secho(Messages.TMUX_NOT_AVAILABLE, fg=Colors.ERROR, err=True)
         raise typer.Exit(1)
 
 
 # Git operations
 def create_worktree(label: str, worktree_path: Path, base_branch: Optional[str] = None):
     """Create a new git worktree and branch."""
+    try:
+        _validate_branch_name(label)
+        if base_branch:
+            _validate_branch_name(base_branch)
+    except ValueError as e:
+        typer.secho(f"Invalid input: {e}", fg="red", err=True)
+        raise typer.Exit(1)
+    
     repo_root = get_git_repo_root()
     cmd = ["git", "worktree", "add", "-b", label, str(worktree_path)]
     if base_branch:
@@ -110,6 +170,12 @@ def checkout_worktree(
 
 def delete_branch(branch_name: str):
     """Delete a git branch."""
+    try:
+        _validate_branch_name(branch_name)
+    except ValueError as e:
+        typer.secho(f"Invalid branch name: {e}", fg="red", err=True)
+        return
+    
     repo_root = get_git_repo_root()
     cmd = ["git", "branch", "-D", branch_name]
 
@@ -124,6 +190,12 @@ def delete_branch(branch_name: str):
 # Tmux operations
 def tmux_session_exists(session_name: str) -> bool:
     """Check if a tmux session exists."""
+    try:
+        _validate_session_name(session_name)
+    except ValueError as e:
+        typer.secho(f"Invalid session name: {e}", fg="red", err=True)
+        return False
+    
     _check_tmux()
     result = run_cmd(
         ["tmux", "has-session", "-t", session_name],
@@ -136,6 +208,12 @@ def tmux_session_exists(session_name: str) -> bool:
 
 def create_tmux_session(session_name: str, worktree_path: Path):
     """Create a new detached tmux session."""
+    try:
+        _validate_session_name(session_name)
+    except ValueError as e:
+        typer.secho(f"Invalid input: {e}", fg="red", err=True)
+        raise typer.Exit(1)
+    
     _check_tmux()
     cmd = ["tmux", "new-session", "-d", "-s", session_name, "-c", str(worktree_path)]
 
@@ -151,6 +229,12 @@ def create_tmux_session(session_name: str, worktree_path: Path):
 
 def kill_tmux_session(session_name: str):
     """Kill a tmux session."""
+    try:
+        _validate_session_name(session_name)
+    except ValueError as e:
+        typer.secho(f"Invalid session name: {e}", fg="red", err=True)
+        return
+    
     _check_tmux()
     cmd = ["tmux", "kill-session", "-t", session_name]
 
@@ -163,9 +247,19 @@ def kill_tmux_session(session_name: str):
 
 def send_tmux_keys(session_name: str, command: str, pane: str = "0"):
     """Send keys (command) to a tmux session."""
+    try:
+        _validate_session_name(session_name)
+        # Validate pane identifier 
+        if not re.match(Config.VALID_PANE_PATTERN, pane):
+            raise ValueError(f"Invalid pane identifier: {pane}")
+        sanitized_command = _sanitize_command(command)
+    except ValueError as e:
+        typer.secho(Messages.INVALID_INPUT.format(error=e), fg=Colors.ERROR, err=True)
+        return
+    
     _check_tmux()
     target = f"{session_name}:{pane}"
-    cmd = ["tmux", "send-keys", "-t", target, command, "Enter"]
+    cmd = ["tmux", "send-keys", "-t", target, sanitized_command, "Enter"]
 
     try:
         run_cmd(cmd)
@@ -176,6 +270,12 @@ def send_tmux_keys(session_name: str, command: str, pane: str = "0"):
 
 def open_tmux_session(session_name: str):
     """Attach to or switch to a tmux session."""
+    try:
+        _validate_session_name(session_name)
+    except ValueError as e:
+        typer.secho(f"Invalid input: {e}", fg="red", err=True)
+        raise typer.Exit(1)
+    
     _check_tmux()
 
     if os.getenv("TMUX"):  # Inside tmux
