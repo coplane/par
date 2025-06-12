@@ -1,16 +1,16 @@
-# Par: Agentic Parallel Development Toolkit
+# Par: Parallel Worktree & Session Manager
 
-> **AI-enhanced parallel development workflows with intelligent automation and beautiful terminal experience**
+> **Easily manage parallel development workflows with isolated Git worktrees and tmux sessions**
 
 `par` is a command-line tool designed to simplify parallel development within a single Git repository. It's specifically designed for working with AI coding assistants, background agents, or multiple development contexts simultaneously, `par` creates isolated workspaces that don't interfere with each other.
 
 ## Why Par?
 
-Tools like OpenAI Codex, Claude Code, GitHub Copilot, and other AI coding assistants have revolutionized parallel development. Par amplifies this by providing **isolated, AI-enhanced development environments** for each task:
+Tools like OpenAI Codex, Claude Code, GitHub Copilot, and other AI coding assistants have revolutionized parallel development. Par amplifies this by providing **isolated development environments** perfect for AI-assisted workflows:
 
 - **🔀 Git Worktrees**: Each session gets its own directory and branch
-- **🖥️ Tmux Sessions**: Persistent terminal sessions where AI agents can run autonomously
-- **🤖 AI Integration**: Native Claude support with agent mode for intelligent assistance
+- **🖥️ Tmux Sessions**: Persistent terminal sessions for long-running tasks
+- **🚀 IDE Integration**: Direct support for VSCode and Cursor
 - **🔄 Flexible Branch Management**: Rename repository branches independently within workspaces
 - **🏷️ Simple Labels**: Easy-to-remember names for each session
 - **📡 Remote Control**: Send commands to any or all sessions
@@ -86,11 +86,11 @@ par cursor               # Open current workspace/repo in Cursor
 - `par control-center` - View all contexts in a tiled tmux layout
 - Tab completion works across both sessions and workspaces
 
-### AI Integration Everywhere:
+### Smart Integration:
 
-- **Context Awareness**: Par understands your current workspace and provides relevant AI commands
-- **Autonomous Development**: Claude agent mode with bypass permissions for independent coding
-- **IDE Integration**: Seamless Cursor support for AI-enhanced editing
+- **Context Awareness**: Par understands your current workspace and shows relevant commands
+- **IDE Integration**: Seamless support for VSCode and Cursor
+- **Beautiful Terminal UX**: Rich terminal interface with helpful context display
 
 This eliminates the need to remember which type of development context you're working with - just use the label and `par` handles the rest!
 

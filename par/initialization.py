@@ -105,7 +105,7 @@ def show_welcome_message(workspace_mode: bool = False) -> None:
 """
 
     console.print(f"[bold blue]{ascii_art}[/bold blue]")
-    console.print("[bold magenta]agentic parallel development[/bold magenta]")
+    console.print("[bold magenta]parallel worktree & session manager[/bold magenta]")
     console.print()
 
     try:
