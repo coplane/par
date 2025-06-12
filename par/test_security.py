@@ -2,7 +2,7 @@
 
 import pytest
 
-from .operations import _validate_session_name, _validate_branch_name, _sanitize_command
+from .operations import _sanitize_command, _validate_branch_name, _validate_session_name
 
 
 class TestInputValidation:
@@ -18,7 +18,7 @@ class TestInputValidation:
             "a",  # Single character
             "very-long-session-name-that-is-still-valid",
         ]
-        
+
         for name in valid_names:
             # Should not raise exception
             _validate_session_name(name)
@@ -33,7 +33,7 @@ class TestInputValidation:
             "session$dollar",  # Dollar sign
             "a" * 65,  # Too long (max 64)
         ]
-        
+
         for name in invalid_names:
             with pytest.raises(ValueError):
                 _validate_session_name(name)
@@ -51,7 +51,7 @@ class TestInputValidation:
             "main",
             "develop",
         ]
-        
+
         for name in valid_names:
             # Should not raise exception
             _validate_branch_name(name)
@@ -70,7 +70,7 @@ class TestInputValidation:
             "branch\\danger",  # Backslash
             "a" * 256,  # Too long (max 255)
         ]
-        
+
         for name in invalid_names:
             with pytest.raises(ValueError):
                 _validate_branch_name(name)
@@ -84,7 +84,7 @@ class TestInputValidation:
             ("cd /path/to/dir", "cd /path/to/dir"),  # Path command
             ("npm run build", "npm run build"),  # NPM command
         ]
-        
+
         for input_cmd, expected in test_cases:
             result = _sanitize_command(input_cmd)
             assert result == expected
@@ -97,7 +97,7 @@ class TestInputValidation:
             ("normal command", "normal command"),  # No forbidden chars
             ("\0\x1b", ""),  # Only forbidden chars
         ]
-        
+
         for input_cmd, expected in test_cases:
             result = _sanitize_command(input_cmd)
             assert result == expected
@@ -105,7 +105,7 @@ class TestInputValidation:
     def test_sanitize_command_length_limit(self):
         """Test that overly long commands raise ValueError."""
         long_command = "echo " + "a" * 1000  # Over 1000 chars total
-        
+
         with pytest.raises(ValueError, match="Command too long"):
             _sanitize_command(long_command)
 
@@ -123,8 +123,8 @@ class TestSecurityEdgeCases:
         # Session names with unicode should be rejected
         with pytest.raises(ValueError):
             _validate_session_name("session-ñame")
-        
-        # Branch names with unicode should be rejected  
+
+        # Branch names with unicode should be rejected
         with pytest.raises(ValueError):
             _validate_branch_name("branch-ñame")
 
@@ -133,23 +133,23 @@ class TestSecurityEdgeCases:
         # Maximum valid session name (64 chars)
         max_session = "a" * 64
         _validate_session_name(max_session)  # Should pass
-        
+
         # One character too long
         with pytest.raises(ValueError):
             _validate_session_name("a" * 65)
-        
+
         # Maximum valid branch name (255 chars)
         max_branch = "a" * 255
         _validate_branch_name(max_branch)  # Should pass
-        
+
         # One character too long
         with pytest.raises(ValueError):
             _validate_branch_name("a" * 256)
-        
+
         # Maximum valid command (1000 chars)
         max_command = "echo " + "a" * 995  # 1000 total
         _sanitize_command(max_command)  # Should pass
-        
+
         # One character too long
         with pytest.raises(ValueError):
             _sanitize_command("echo " + "a" * 996)  # 1001 total
@@ -169,19 +169,19 @@ class TestSecurityEdgeCases:
             "session\rmalicious_command",
             "session\tmalicious_command",
         ]
-        
+
         for session in injection_sessions:
             with pytest.raises(ValueError):
                 _validate_session_name(session)
-        
+
         # Branch name injection attempts (similar patterns)
         injection_branches = [
             "branch; rm -rf /",
-            "branch && malicious_command", 
+            "branch && malicious_command",
             "$(malicious_command)",
             "`malicious_command`",
         ]
-        
+
         for branch in injection_branches:
             with pytest.raises(ValueError):
                 _validate_branch_name(branch)
@@ -190,13 +190,13 @@ class TestSecurityEdgeCases:
         """Test path traversal attempts in branch names."""
         traversal_attempts = [
             "../../../etc/passwd",
-            "branch/../../../secret", 
+            "branch/../../../secret",
             "branch/./hidden",
             "branch/../other",
         ]
-        
+
         for attempt in traversal_attempts:
-            if '..' in attempt or '//' in attempt or '--' in attempt:
+            if ".." in attempt or "//" in attempt or "--" in attempt:
                 # These should be rejected due to forbidden patterns
                 with pytest.raises(ValueError):
                     _validate_branch_name(attempt)
@@ -211,14 +211,14 @@ class TestSecurityEdgeCases:
         """Test handling of special file names."""
         special_names = [
             "CON",  # Windows reserved
-            "PRN",  # Windows reserved  
+            "PRN",  # Windows reserved
             "AUX",  # Windows reserved
             "NUL",  # Windows reserved
             ".git",  # Git special directory
-            "..",   # Parent directory
-            ".",    # Current directory
+            "..",  # Parent directory
+            ".",  # Current directory
         ]
-        
+
         # These might be valid in some contexts but should be handled carefully
         for name in special_names:
             # Test as session names - some should fail
@@ -226,10 +226,10 @@ class TestSecurityEdgeCases:
                 _validate_session_name(name)
             except ValueError:
                 pass  # Expected for some special names
-            
+
             # Test as branch names - some should fail
             try:
-                _validate_branch_name(name)  
+                _validate_branch_name(name)
             except ValueError:
                 pass  # Expected for some special names
 
@@ -249,7 +249,7 @@ class TestValidationIntegration:
             "experiment-new-ui",
             "test-performance",
         ]
-        
+
         for name in realistic_names:
             _validate_session_name(name)  # Should all pass
 
@@ -267,7 +267,7 @@ class TestValidationIntegration:
             "staging",
             "feature/PROJ-456-new-feature",
         ]
-        
+
         for name in realistic_names:
             _validate_branch_name(name)  # Should all pass
 
@@ -287,22 +287,10 @@ class TestValidationIntegration:
             "cd frontend && npm start",
             "echo 'Starting development server...'",
         ]
-        
+
         for cmd in realistic_commands:
             result = _sanitize_command(cmd)
             assert result == cmd  # Should be unchanged
 
 
-if __name__ == "__main__":
-    # Basic smoke test when run directly
-    print("Testing session name validation...")
-    _validate_session_name("test-session")
-    
-    print("Testing branch name validation...")
-    _validate_branch_name("feature/test-branch")
-    
-    print("Testing command sanitization...")
-    result = _sanitize_command("echo 'hello world'")
-    assert result == "echo 'hello world'"
-    
-    print("✅ All security validation tests passed")
+# Test file for security validation

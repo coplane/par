@@ -42,7 +42,14 @@ def get_session_labels() -> List[str]:
 
 def version_callback(value: bool):
     if value:
-        typer.echo("par version: 0.1.0 (with welcome message)")
+        try:
+            from importlib.metadata import version
+
+            ver = version("par")
+        except Exception:
+            # Fallback if package not installed
+            ver = "development"
+        typer.echo(f"par version: {ver}")
         raise typer.Exit()
 
 

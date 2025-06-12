@@ -534,7 +534,4 @@ class TestValidationAndErrorHandling:
             mock_state_manager.update_scoped_data.assert_not_called()
 
 
-if __name__ == "__main__":
-    # Basic smoke test when run directly
-    print("✅ Core session management tests defined")
-    print("Run with: pytest par/test_core.py -v")
+# Test file for core session management
