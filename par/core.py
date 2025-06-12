@@ -93,6 +93,9 @@ def start_session(label: str, open_session: bool = False):
     typer.echo(f"  Branch: {label}")
     typer.echo(f"  Session: {session_name}")
 
+    # Change to worktree directory first
+    operations.send_tmux_keys(session_name, f"cd {worktree_path}")
+
     # Send welcome message to tmux session
     operations.send_tmux_keys(session_name, "par")
 

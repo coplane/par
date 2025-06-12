@@ -152,13 +152,6 @@ def _run_workspace_initialization(
             )
             has_initialization = True
 
-    # Return to workspace root after initialization
-    if has_initialization:
-        # Calculate the actual workspace root directory (parent of all repo worktrees)
-        first_worktree_path = Path(repos_data[0]["worktree_path"])
-        workspace_root = first_worktree_path.parent.parent
-        operations.send_tmux_keys(session_name, f"cd {workspace_root}")
-
     return has_initialization
 
 
@@ -224,6 +217,12 @@ def start_workspace_session(
 
     # Step 7: Display success and handle opening
     _display_workspace_created(label, repos_data, session_name)
+
+    # Change to workspace root directory first
+    if repos_data:
+        first_worktree_path = Path(repos_data[0]["worktree_path"])
+        workspace_root = first_worktree_path.parent.parent
+        operations.send_tmux_keys(session_name, f"cd {workspace_root}")
 
     # Send welcome message to tmux session
     operations.send_tmux_keys(session_name, "par")

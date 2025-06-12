@@ -251,7 +251,8 @@ class TestWorkspaceHelperFunctions:
 
         assert has_init is True
         mock_run_init.assert_called_once()
-        mock_send_keys.assert_called_once()  # Should cd to workspace root
+        # We no longer send cd command in _run_workspace_initialization
+        mock_send_keys.assert_not_called()
 
     @patch("par.workspace.initialization.load_par_config")
     def test_run_workspace_initialization_no_config(self, mock_load_config):
@@ -337,8 +338,8 @@ class TestWorkspaceOperations:
             [Path("/workspace/frontend"), Path("/workspace/backend")],
         )
         mock_create_worktrees.return_value = [
-            {"repo_name": "frontend"},
-            {"repo_name": "backend"},
+            {"repo_name": "frontend", "worktree_path": "/tmp/frontend"},
+            {"repo_name": "backend", "worktree_path": "/tmp/backend"},
         ]
         mock_run_init.return_value = False
 
@@ -352,7 +353,12 @@ class TestWorkspaceOperations:
         mock_run_init.assert_called_once()
         mock_update_state.assert_called_once()
         mock_display.assert_called_once()
-        mock_send_keys.assert_called_with("par-ws-workspace-abc1-feature-auth", "par")
+        # Should send cd command and welcome message
+        assert mock_send_keys.call_count == 2
+        # The workspace root is calculated as worktree_path.parent.parent
+        # /tmp/frontend -> /tmp -> /
+        mock_send_keys.assert_any_call("par-ws-workspace-abc1-feature-auth", "cd /")
+        mock_send_keys.assert_any_call("par-ws-workspace-abc1-feature-auth", "par")
 
     @patch("par.workspace._prepare_workspace_repos")
     @patch("par.workspace._validate_workspace_creation")
@@ -383,7 +389,9 @@ class TestWorkspaceOperations:
         mock_cwd.return_value = Path("/workspace")
         mock_get_session_name.return_value = "session-name"
         mock_prepare_repos.return_value = (["frontend"], [Path("/workspace/frontend")])
-        mock_create_worktrees.return_value = [{"repo_name": "frontend"}]
+        mock_create_worktrees.return_value = [
+            {"repo_name": "frontend", "worktree_path": "/tmp/frontend"}
+        ]
         mock_run_init.return_value = False
 
         workspace.start_workspace_session("feature-auth", open_session=True)

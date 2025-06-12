@@ -113,7 +113,7 @@ def show_welcome_message(workspace_mode: bool = False) -> None:
         contexts_info = _get_smart_contexts()
 
         if contexts_info["total_contexts"] > 0:
-            if contexts_info["is_inside_workspace"]:
+            if contexts_info.get("is_inside_workspace"):
                 # Show current workspace info
                 current_workspace = contexts_info["current_workspace"]
                 console.print(
@@ -139,6 +139,27 @@ def show_welcome_message(workspace_mode: bool = False) -> None:
                 )
                 console.print(
                     "  [bright_blue]par cursor[/bright_blue]           # Open in Cursor"
+                )
+            elif contexts_info.get("is_inside_session"):
+                # Show current session info
+                current_session = contexts_info["current_session"]
+                console.print(
+                    f"🚀 [bold green]Active Session:[/bold green] [cyan]{current_session['label']}[/cyan]"
+                )
+                console.print(f"  Repository: [green]{current_session['repo']}[/green]")
+                console.print(f"  Branch: [yellow]{current_session['branch']}[/yellow]")
+                console.print()
+
+                # Show session commands
+                console.print("⚡ [bold yellow]Session Commands:[/bold yellow]")
+                console.print(
+                    "  [bright_blue]par open <label>[/bright_blue]     # Switch to another session"
+                )
+                console.print(
+                    "  [bright_blue]par control-center[/bright_blue]   # View all sessions"
+                )
+                console.print(
+                    "  [bright_blue]par rm <label>[/bright_blue]       # Remove a session"
                 )
             else:
                 # Show all contexts (ls-style)
@@ -241,6 +262,47 @@ def _get_smart_contexts() -> Dict[str, Any]:
                 "total_contexts": 1,
                 "is_inside_workspace": True,
                 "current_workspace": current_workspace,
+                "contexts": [],
+            }
+
+        # Check if we're inside a single-repo session worktree
+        current_session = None
+        is_inside_session = False
+
+        # Check single-repo sessions
+        state_file = utils.get_data_dir() / "state.json"
+        if state_file.exists():
+            try:
+                with open(state_file, "r") as f:
+                    all_sessions = json.loads(f.read().strip() or "{}")
+
+                # Check if current directory is within any session's worktree
+                for repo_path, sessions_data in all_sessions.items():
+                    for session_label, session_info in sessions_data.items():
+                        worktree_path = session_info.get("worktree_path", "")
+                        if worktree_path and current_path_str.startswith(
+                            str(Path(worktree_path))
+                        ):
+                            is_inside_session = True
+                            current_session = {
+                                "label": session_label,
+                                "type": "session",
+                                "branch": session_info.get(
+                                    "branch_name", session_label
+                                ),
+                                "repo": Path(repo_path).name,
+                            }
+                            break
+                    if is_inside_session:
+                        break
+            except Exception:
+                pass
+
+        if is_inside_session and current_session:
+            return {
+                "total_contexts": 1,
+                "is_inside_session": True,
+                "current_session": current_session,
                 "contexts": [],
             }
         else:
