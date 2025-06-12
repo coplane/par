@@ -305,18 +305,16 @@ def _get_session_contexts() -> Dict[str, Any]:
 
 
 def _get_workspace_contexts() -> Dict[str, Any]:
-    """Get information about current workspace and sessions."""
+    """Get information about workspace contexts only."""
     try:
         import subprocess
         from pathlib import Path
-
-        from . import core
 
         contexts = []
         current_repo_name = None
         current_dir = Path.cwd()
 
-        # Try to get single-repo sessions if we're in a git repository (silently)
+        # Try to get current repo name if we're in a git repository (silently)
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--show-toplevel"],
@@ -326,18 +324,6 @@ def _get_workspace_contexts() -> Dict[str, Any]:
             )
             current_repo_root = Path(result.stdout.strip())
             current_repo_name = current_repo_root.name
-
-            sessions = core._get_repo_sessions()
-            # Add single-repo sessions
-            for label, data in sessions.items():
-                contexts.append(
-                    {
-                        "label": label,
-                        "type": "session",
-                        "repos": [current_repo_name],
-                        "branch": data["branch_name"],
-                    }
-                )
         except (subprocess.CalledProcessError, FileNotFoundError):
             # Not in a git repository
             pass
