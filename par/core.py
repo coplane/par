@@ -251,33 +251,63 @@ def send_command(target: str, command: str):
 
 
 def list_sessions():
-    """List all sessions and workspaces for the current repository."""
+    """List all sessions and workspaces for the current location."""
+    from pathlib import Path
+
     from . import workspace
 
-    sessions = _get_repo_sessions()
-    current_repo_root = utils.get_git_repo_root()
-    current_repo_name = current_repo_root.name
+    current_dir = Path.cwd()
 
-    # Get workspaces that contain this repository
+    # Try to get current repo info if we're in a git repo
+    current_repo_root = utils.try_get_git_repo_root()
+    if current_repo_root:
+        current_repo_name = current_repo_root.name
+        sessions = _get_repo_sessions()
+    else:
+        # Not in a git repo, that's OK for workspaces
+        current_repo_name = None
+        sessions = {}
+
+    # Get workspaces - check parent directory if we're in a git repo
+    if current_repo_root:
+        # When in a git repo, check parent directory for workspaces
+        workspace_dir = current_repo_root.parent
+    else:
+        # When not in a git repo, use current directory
+        workspace_dir = current_dir
+
+    workspace_sessions = workspace._get_workspace_sessions(workspace_dir)
+
+    # If we're in a git repo, filter workspaces to show only relevant ones
     relevant_workspaces = []
-    current_dir = current_repo_root.parent  # Go up to find workspace directories
-    workspace_sessions = workspace._get_workspace_sessions(current_dir)
-
-    for ws_label, ws_data in workspace_sessions.items():
-        # Check if this workspace contains the current repository
-        for repo_data in ws_data.get("repos", []):
-            if repo_data["repo_name"] == current_repo_name:
-                relevant_workspaces.append((ws_label, ws_data, repo_data))
-                break
+    if current_repo_name:
+        for ws_label, ws_data in workspace_sessions.items():
+            # Check if this workspace contains the current repository
+            for repo_data in ws_data.get("repos", []):
+                if repo_data["repo_name"] == current_repo_name:
+                    relevant_workspaces.append((ws_label, ws_data, repo_data))
+                    break
+    else:
+        # Not in a git repo - show all workspaces for current directory
+        for ws_label, ws_data in workspace_sessions.items():
+            # Use first repo data for display
+            repo_data = ws_data.get("repos", [{}])[0] if ws_data.get("repos") else {}
+            relevant_workspaces.append((ws_label, ws_data, repo_data))
 
     if not sessions and not relevant_workspaces:
-        typer.secho(
-            "No active sessions or workspaces for this repository.", fg="yellow"
-        )
+        if current_repo_name:
+            typer.secho(
+                "No active sessions or workspaces for this repository.", fg="yellow"
+            )
+        else:
+            typer.secho("No active workspaces in this directory.", fg="yellow")
         return
 
     console = Console()
-    table = Table(title=f"Par Development Contexts for {current_repo_name}")
+    if current_repo_name:
+        table = Table(title=f"Par Development Contexts for {current_repo_name}")
+    else:
+        table = Table(title="Par Workspaces")
     table.add_column("Label", style="cyan", no_wrap=True)
     table.add_column("Type", style="bold blue", no_wrap=True)
     table.add_column("Tmux Session", style="magenta")
@@ -307,18 +337,23 @@ def list_sessions():
         )
 
         # Get other repos in this workspace
-        other_repos = [
-            r["repo_name"]
-            for r in ws_data.get("repos", [])
-            if r["repo_name"] != current_repo_name
-        ]
-        other_repos_str = ", ".join(other_repos) if other_repos else "-"
+        if current_repo_name:
+            other_repos = [
+                r["repo_name"]
+                for r in ws_data.get("repos", [])
+                if r["repo_name"] != current_repo_name
+            ]
+            other_repos_str = ", ".join(other_repos) if other_repos else "-"
+        else:
+            # Show all repos when not in a git repo
+            all_repos = [r["repo_name"] for r in ws_data.get("repos", [])]
+            other_repos_str = ", ".join(all_repos) if all_repos else "-"
 
         table.add_row(
             ws_label,
             "Workspace",
             f"{ws_data['session_name']} ({session_active})",
-            repo_data["branch_name"],
+            repo_data.get("branch_name", ws_label),
             other_repos_str,
             ws_data["created_at"][:16],
         )

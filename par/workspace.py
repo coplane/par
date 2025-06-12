@@ -18,6 +18,21 @@ def _get_workspace_key(workspace_root: Path) -> str:
     return str(workspace_root.resolve())
 
 
+def _get_workspace_directory() -> Path:
+    """Get the appropriate directory to check for workspaces.
+
+    If we're in a git repository, check the parent directory.
+    Otherwise, use the current directory.
+    """
+    repo_root = utils.try_get_git_repo_root()
+    if repo_root:
+        # In a git repo - check parent directory for workspaces
+        return repo_root.parent
+    else:
+        # Not in a git repo - use current directory
+        return Path.cwd()
+
+
 def _get_workspace_sessions(workspace_root: Path) -> Dict[str, Any]:
     state_manager = get_workspace_state_manager()
     workspace_key = _get_workspace_key(workspace_root)
@@ -241,8 +256,8 @@ def start_workspace_session(
 
 def list_workspace_sessions():
     """List all workspace sessions for the current directory."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
+    workspace_dir = _get_workspace_directory()
+    workspace_sessions = _get_workspace_sessions(workspace_dir)
 
     if not workspace_sessions:
         typer.secho("No workspace sessions found for this directory.", fg="yellow")
@@ -274,8 +289,8 @@ def list_workspace_sessions():
 
 def open_workspace_session(label: str):
     """Open/attach to a specific workspace session."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
+    workspace_dir = _get_workspace_directory()
+    workspace_sessions = _get_workspace_sessions(workspace_dir)
 
     if label not in workspace_sessions:
         typer.secho(f"Error: Workspace '{label}' not found.", fg="red", err=True)
@@ -294,8 +309,8 @@ def open_workspace_session(label: str):
 
 def remove_workspace_session(label: str):
     """Remove a specific workspace session."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
+    workspace_dir = _get_workspace_directory()
+    workspace_sessions = _get_workspace_sessions(workspace_dir)
 
     if label not in workspace_sessions:
         typer.secho(f"Error: Workspace '{label}' not found.", fg="red", err=True)
@@ -319,10 +334,10 @@ def remove_workspace_session(label: str):
     # Remove entire workspace directory
     if session_data["repos"]:
         first_worktree_path = Path(session_data["repos"][0]["worktree_path"])
-        workspace_dir = first_worktree_path.parent.parent
+        workspace_files_dir = first_worktree_path.parent.parent
         try:
-            shutil.rmtree(workspace_dir)  # Remove entire directory tree
-            typer.secho(f"Removed workspace directory: {workspace_dir}", dim=True)
+            shutil.rmtree(workspace_files_dir)  # Remove entire directory tree
+            typer.secho(f"Removed workspace directory: {workspace_files_dir}", dim=True)
         except OSError as e:
             typer.secho(
                 f"Warning: Could not remove workspace directory: {e}", fg="yellow"
@@ -331,15 +346,15 @@ def remove_workspace_session(label: str):
 
     # Update state
     del workspace_sessions[label]
-    _update_workspace_sessions(current_dir, workspace_sessions)
+    _update_workspace_sessions(workspace_dir, workspace_sessions)
 
     typer.secho(f"Successfully removed workspace '{label}'.", fg="green")
 
 
 def remove_all_workspace_sessions():
     """Remove all workspace sessions for the current directory."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
+    workspace_dir = _get_workspace_directory()
+    workspace_sessions = _get_workspace_sessions(workspace_dir)
 
     if not workspace_sessions:
         typer.secho("No workspace sessions to remove.", fg="yellow")
@@ -368,8 +383,8 @@ def remove_all_workspace_sessions():
 
 def open_workspace_in_ide(label: str, ide: str):
     """Open a workspace in the specified IDE."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
+    workspace_dir = _get_workspace_directory()
+    workspace_sessions = _get_workspace_sessions(workspace_dir)
 
     if label not in workspace_sessions:
         typer.secho(f"Error: Workspace '{label}' not found.", fg="red", err=True)

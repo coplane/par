@@ -414,6 +414,34 @@ class TestSessionOperations:
         # Should return early and not raise exception
         core.open_control_center()
 
+    @patch("par.core.utils.try_get_git_repo_root")
+    @patch("par.workspace._get_workspace_sessions")
+    @patch("par.core.Console")
+    def test_list_sessions_outside_git_repo(
+        self, mock_console, mock_workspace_sessions, mock_try_git_root
+    ):
+        """Test listing sessions when not in a git repository."""
+        # Simulate not being in a git repo
+        mock_try_git_root.return_value = None
+
+        # Have some workspaces
+        mock_workspace_sessions.return_value = {
+            "feature-x": {
+                "session_name": "par-ws-proj-abc1-feature-x",
+                "repos": [
+                    {"repo_name": "frontend", "branch_name": "feature-x"},
+                    {"repo_name": "backend", "branch_name": "feature-x"},
+                ],
+                "created_at": "2025-01-01T00:00:00",
+            }
+        }
+
+        # Should not raise exception and should show workspaces
+        core.list_sessions()
+
+        # Should create and print table
+        mock_console.return_value.print.assert_called()
+
 
 class TestCheckoutOperations:
     """Test checkout-related operations."""

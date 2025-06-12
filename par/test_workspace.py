@@ -29,13 +29,13 @@ def sample_workspace_data():
                 {
                     "repo_name": "frontend",
                     "repo_path": "/workspace/frontend",
-                    "worktree_path": "/tmp/par/workspaces/def456/feature-auth/frontend/feature-auth",
+                    "worktree_path": "/tmp/par/workspaces/def456/feature-auth/frontend",
                     "branch_name": "feature-auth",
                 },
                 {
                     "repo_name": "backend",
                     "repo_path": "/workspace/backend",
-                    "worktree_path": "/tmp/par/workspaces/def456/feature-auth/backend/feature-auth",
+                    "worktree_path": "/tmp/par/workspaces/def456/feature-auth/backend",
                     "branch_name": "feature-auth",
                 },
             ],

@@ -132,8 +132,9 @@ def send(
 @app.command(name="ls")
 def list_sessions():
     """
-    List all 'par'-managed sessions for the current repository.
-    Shows label, tmux session name, worktree path, and branch.
+    List all 'par'-managed sessions and workspaces.
+    When in a git repository, shows sessions and workspaces for that repo.
+    When in a workspace directory, shows all workspaces.
     """
     core.list_sessions()
 

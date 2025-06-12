@@ -325,14 +325,11 @@ class TestWorkspaceUtilities:
             / workspace_id
             / "feature-auth"
             / "frontend"
-            / "feature-auth"
         )
 
         assert worktree_path == expected
         # Function should create parent directories
-        assert (
-            worktree_path.parent.parent.parent.exists()
-        )  # workspace_id dir should exist
+        assert worktree_path.parent.parent.exists()  # workspace_id dir should exist
 
     def test_get_workspace_session_name(self):
         """Test workspace session name generation."""

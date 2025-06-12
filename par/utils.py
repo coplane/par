@@ -57,6 +57,22 @@ def get_git_repo_root() -> Path:
         raise typer.Exit(1)
 
 
+def try_get_git_repo_root() -> Optional[Path]:
+    """Try to get the root directory of the current git repository, return None if not in a repo."""
+    try:
+        result = run_cmd(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture=True,
+            suppress_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+        return None
+    except (subprocess.CalledProcessError, typer.Exit, Exception):
+        return None
+
+
 def get_data_dir() -> Path:
     """Get par's data directory."""
     xdg_data_home = os.getenv("XDG_DATA_HOME")
@@ -71,7 +87,9 @@ def get_data_dir() -> Path:
 
 def _get_repo_id(repo_root: Path) -> str:
     """Generate a unique ID for the repository."""
-    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:Config.REPO_ID_LENGTH]
+    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[
+        : Config.REPO_ID_LENGTH
+    ]
 
 
 def get_worktree_path(repo_root: Path, label: str) -> Path:
@@ -84,14 +102,20 @@ def get_worktree_path(repo_root: Path, label: str) -> Path:
 
 def get_tmux_session_name(repo_root: Path, label: str) -> str:
     """Generate a tmux session name."""
-    repo_name = repo_root.name.lower().replace(" ", "-").replace(".", "-")[:Config.SESSION_NAME_MAX_LENGTH]
+    repo_name = (
+        repo_root.name.lower()
+        .replace(" ", "-")
+        .replace(".", "-")[: Config.SESSION_NAME_MAX_LENGTH]
+    )
     repo_id = _get_repo_id(repo_root)[:4]
     return f"{Config.TMUX_SESSION_PREFIX}-{repo_name}-{repo_id}-{label}"
 
 
 def get_repo_id(repo_root: Path) -> str:  # New function
     """Generates a unique, filesystem-friendly ID for the repository."""
-    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[:Config.REPO_ID_FULL_LENGTH]
+    return hashlib.sha256(str(repo_root.resolve()).encode()).hexdigest()[
+        : Config.REPO_ID_FULL_LENGTH
+    ]
 
 
 def get_worktrees_base_dir() -> Path:  # New function (ensure it exists)
@@ -144,7 +168,7 @@ def get_workspace_worktree_path(
     ]
     workspace_dir = get_data_dir() / "workspaces" / workspace_id / workspace_label
     workspace_dir.mkdir(parents=True, exist_ok=True)
-    return workspace_dir / repo_name / label
+    return workspace_dir / repo_name
 
 
 def get_workspace_session_name(workspace_root: Path, workspace_label: str) -> str:
@@ -194,20 +218,20 @@ def get_workspace_file_path(workspace_root: Path, workspace_label: str) -> Path:
 def save_vscode_workspace_file(workspace_label: str, repos_data: List[Dict]) -> Path:
     """Save VSCode workspace file and return path."""
     import json
-    
+
     workspace_config = generate_vscode_workspace(workspace_label, repos_data)
-    
+
     # Use the first repo's path to determine workspace root
     if not repos_data:
         raise ValueError("No repositories provided for workspace")
-    
+
     first_repo_path = Path(repos_data[0]["worktree_path"])
     # Navigate up to get workspace root: workspace_dir/repo_name/branch -> workspace_dir/../..
     workspace_root = first_repo_path.parent.parent.parent.parent
-    
+
     workspace_file = get_workspace_file_path(workspace_root, workspace_label)
-    
-    with open(workspace_file, 'w') as f:
+
+    with open(workspace_file, "w") as f:
         json.dump(workspace_config, f, indent=2)
-    
+
     return workspace_file
