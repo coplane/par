@@ -1,5 +1,9 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "par"
+name = "par-cli"
 version = "0.1.0"
 description = "Parallel repo sessions manager"
 authors = [ { name="Victor", email="vimota@gmail.com" } ]
@@ -9,19 +13,25 @@ dependencies = [
     "pyyaml",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["par"]
+
 [project.optional-dependencies]
 dev = [
     "pytest",
     "ruff",
     "pre-commit",
+    "build",
 ]
 
 [tool.uv]
 package = true
 dev-dependencies = [
     "pytest",
-    "ruff", 
+    "ruff",
     "pre-commit",
+    "hatchling>=1.27.0",
+    "build",
 ]
 
 [project.scripts]

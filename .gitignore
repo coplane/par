@@ -1,4 +1,3 @@
-*.egg-info/
 *.pyc
 *.pyo
 *.pyd
@@ -10,4 +9,14 @@
 *.pyzwzw
 *.pyzwzwz
 .local/
+.venv/
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
 build/
+*.egg-info/
