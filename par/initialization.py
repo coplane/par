@@ -1,7 +1,9 @@
 """Initialization support for .par.yaml configuration files."""
 
+import glob
+import shutil
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 
 import typer
 import yaml
@@ -26,6 +28,29 @@ def load_par_config(repo_root: Path) -> Optional[Dict[str, Any]]:
         typer.secho(f"Warning: Could not read .par.yaml: {e}", fg="yellow")
         return None
 
+
+def copy_included_files(
+    config: Dict[str, Any], repo_root: Path, worktree_path: Path
+) -> None:
+    """Copy files listed in the initialization.include section."""
+    initialization = config.get("initialization", {})
+    includes: Iterable[str] = initialization.get("include", [])
+    for pattern in includes:
+        # Expand pattern relative to the repository root
+        full_pattern = str(repo_root / pattern)
+        for src in glob.glob(full_pattern):
+            src_path = Path(src)
+            try:
+                relative = src_path.relative_to(repo_root)
+            except ValueError:
+                # Skip paths outside the repository
+                continue
+            dest = worktree_path / relative
+            if src_path.is_dir():
+                shutil.copytree(src_path, dest, dirs_exist_ok=True)
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_path, dest)
 
 def run_initialization(
     config: Dict[str, Any],
