@@ -129,6 +129,13 @@ def start_workspace_session(
         # Create resources
         operations.create_workspace_worktree(repo_path, label, worktree_path)
 
+        # Copy includes for this repository
+        config = initialization.load_par_config(repo_path)
+        if config:
+            initialization.copy_included_files(
+                config, repo_path, worktree_path
+            )
+
         repos_data.append(
             {
                 "repo_name": repo_name,

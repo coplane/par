@@ -2,6 +2,8 @@
 # Place this file in your repository root to customize par initialization
 
 initialization:
+  include:
+    - .env
   commands:
     # Example: Install frontend dependencies
     - name: "Install frontend dependencies"

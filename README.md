@@ -205,6 +205,9 @@ Shows both single-repo sessions and multi-repo workspaces in separate panes, giv
 ```yaml
 # .par.yaml
 initialization:
+  include:
+    - .env
+    - config/*.json
   commands:
     - name: "Install frontend dependencies"
       command: "cd frontend && pnpm install"
@@ -218,6 +221,8 @@ initialization:
     # Simple string commands are also supported
     - "echo 'Workspace initialized!'"
 ```
+
+Files listed under `include` are copied from the repository root into each new worktree before any commands run. This lets you keep gitignored files like `.env` in the new environment.
 
 All commands start from the worktree root directory. Use `cd <directory> &&` to run commands in subdirectories.
 
