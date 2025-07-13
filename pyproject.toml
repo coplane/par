@@ -1,20 +1,22 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
 name = "par-cli"
-version = "0.1.0"
-description = "Parallel repo sessions manager"
+version = "0.1.1"
+description = "CLI for parallel development workflows with isolated Git worktrees and tmux sessions, tailored for agentic coding."
 authors = [ { name="Victor", email="vimota@gmail.com" } ]
 requires-python = ">=3.12"
 dependencies = [
     "typer",
     "pyyaml",
 ]
+readme = "README.md"
 
-[tool.hatch.build.targets.wheel]
-packages = ["par"]
+[build-system]
+requires = ["uv_build>=0.7.20,<0.8.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "par"
+module-root = ""
 
 [project.optional-dependencies]
 dev = [
@@ -30,8 +32,6 @@ dev-dependencies = [
     "pytest",
     "ruff",
     "pre-commit",
-    "hatchling>=1.27.0",
-    "build",
 ]
 
 [project.scripts]
