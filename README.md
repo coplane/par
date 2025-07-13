@@ -80,6 +80,18 @@ This eliminates the need to remember which type of development context you're wo
 - **Python 3.12+** - Runtime environment
 - **uv** - Package manager (recommended)
 
+### Install with uv
+
+```bash
+uv install par-cli
+```
+
+### Install with pip
+
+```bash
+pip install par-cli
+```
+
 ### Install from Source
 ```bash
 git clone https://github.com/coplane/par.git

@@ -1,26 +1,36 @@
 [project]
-name = "par"
-version = "0.1.0"
-description = "Parallel repo sessions manager"
+name = "par-cli"
+version = "0.1.2"
+description = "CLI for parallel development workflows with isolated Git worktrees and tmux sessions, tailored for agentic coding."
 authors = [ { name="Victor", email="vimota@gmail.com" } ]
 requires-python = ">=3.12"
 dependencies = [
     "typer",
     "pyyaml",
 ]
+readme = "README.md"
+
+[build-system]
+requires = ["uv_build>=0.7.20,<0.8.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "par"
+module-root = ""
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "ruff",
     "pre-commit",
+    "build",
 ]
 
 [tool.uv]
 package = true
 dev-dependencies = [
     "pytest",
-    "ruff", 
+    "ruff",
     "pre-commit",
 ]
 

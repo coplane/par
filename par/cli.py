@@ -1,4 +1,5 @@
 # src/par/cli.py
+import importlib.metadata
 from typing import List, Optional
 
 import typer
@@ -41,7 +42,11 @@ def get_session_labels() -> List[str]:
 
 def version_callback(value: bool):
     if value:
-        typer.echo("par version: 0.1.0")
+        try:
+            version = importlib.metadata.version("par-cli")
+        except importlib.metadata.PackageNotFoundError:
+            version = "unknown (not installed)"
+        typer.echo(f"par version: {version}")
         raise typer.Exit()
 
 
