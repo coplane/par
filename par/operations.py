@@ -8,7 +8,7 @@ from typing import List, Optional
 import typer
 
 from .checkout import CheckoutStrategy
-from .utils import get_git_repo_root, run_cmd
+from .utils import get_git_repo_root, get_tmux_session_name, run_cmd
 
 
 # Tmux utilities
@@ -203,9 +203,6 @@ def open_control_center(sessions_data: List[dict]):
     if not sessions_data:
         typer.secho("No sessions to display.", fg="yellow")
         return
-
-    # Import here to avoid circular dependency
-    from .utils import get_tmux_session_name
 
     repo_root = get_git_repo_root()
     cc_session_name = get_tmux_session_name(repo_root, "cc")

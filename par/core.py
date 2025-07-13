@@ -10,7 +10,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import checkout, initialization, operations, utils
+from . import checkout, initialization, operations, utils, workspace
 
 
 # State management - simplified from SessionManager class
@@ -89,9 +89,10 @@ def start_session(label: str, open_session: bool = False):
     operations.create_worktree(label, worktree_path)
     operations.create_tmux_session(session_name, worktree_path)
 
-    # Run initialization if .par.yaml exists
+    # Run includes and initialization if .par.yaml exists
     config = initialization.load_par_config(repo_root)
     if config:
+        initialization.copy_included_files(config, repo_root, worktree_path)
         initialization.run_initialization(config, session_name, worktree_path)
 
     # Update state
@@ -212,7 +213,6 @@ def send_command(target: str, command: str):
 
 def list_sessions():
     """List all sessions and workspaces for the current repository."""
-    from . import workspace
 
     sessions = _get_repo_sessions()
     current_repo_root = utils.get_git_repo_root()
@@ -288,7 +288,6 @@ def list_sessions():
 
 def open_session(label: str):
     """Open/attach to a specific session or workspace."""
-    from . import workspace
 
     # First try single-repo sessions
     sessions = _get_repo_sessions()
@@ -358,6 +357,14 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
     operations.checkout_worktree(branch_name, worktree_path, strategy)
     operations.create_tmux_session(session_name, worktree_path)
 
+    # Run includes and initialization if .par.yaml exists
+    config = initialization.load_par_config(repo_root)
+    if config:
+        initialization.copy_included_files(config, repo_root, worktree_path)
+        initialization.run_initialization(
+            config, session_name, worktree_path
+        )
+
     # Update state
     sessions[label] = {
         "worktree_path": str(worktree_path),
@@ -382,7 +389,6 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
 
 def open_control_center():
     """Open all sessions and workspaces in a tiled tmux layout."""
-    from . import workspace
 
     sessions = _get_repo_sessions()
     current_repo_root = utils.get_git_repo_root()

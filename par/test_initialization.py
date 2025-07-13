@@ -153,3 +153,20 @@ def test_run_initialization_invalid_command_config(mock_send_keys):
     mock_send_keys.assert_any_call(
         "test-session", "cd /tmp/test-worktree && valid command"
     )
+
+
+def test_copy_included_files(tmp_path):
+    """Files listed under include are copied to the worktree."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    src = repo_root / ".env"
+    src.write_text("SECRET=1")
+
+    worktree_path = tmp_path / "worktree"
+    worktree_path.mkdir()
+
+    config = {"initialization": {"include": [".env"]}}
+    initialization.copy_included_files(config, repo_root, worktree_path)
+
+    dest = worktree_path / ".env"
+    assert dest.exists() and dest.read_text() == "SECRET=1"
