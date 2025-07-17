@@ -83,7 +83,7 @@ This eliminates the need to remember which type of development context you're wo
 ### Install with uv
 
 ```bash
-uv install par-cli
+uv tool install par-cli
 ```
 
 ### Install with pip
