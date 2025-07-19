@@ -199,6 +199,15 @@ def control_center():
     core.open_control_center()
 
 
+@app.command(name="control-center-new")
+def control_center_new():
+    """
+    Create a new 'control-center' tmux session with separate windows for each par session.
+    Must be run from outside tmux. Shows all sessions and workspaces par knows about.
+    """
+    core.open_control_center_new()
+
+
 # Workspace commands
 workspace_app = typer.Typer(help="Manage multi-repository workspaces")
 app.add_typer(workspace_app, name="workspace")

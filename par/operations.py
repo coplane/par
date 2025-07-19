@@ -258,6 +258,53 @@ def open_control_center(sessions_data: List[dict]):
     open_tmux_session(cc_session_name)
 
 
+def open_control_center_new(contexts_data: List[dict]):
+    """Create a new 'control-center' tmux session with separate windows for each context."""
+    _check_tmux()
+
+    if os.getenv("TMUX"):
+        typer.secho(
+            "Error: Control center must be run outside tmux.", fg="red", err=True
+        )
+        raise typer.Exit(1)
+
+    if not contexts_data:
+        typer.secho("No sessions to display.", fg="yellow")
+        return
+
+    cc_session_name = "control-center"
+
+    # Check if control center already exists
+    if tmux_session_exists(cc_session_name):
+        typer.secho(
+            f"Attaching to existing control center '{cc_session_name}'", fg="cyan"
+        )
+        open_tmux_session(cc_session_name)
+        return
+
+    # Create new control center session with first context
+    first_context = contexts_data[0]
+    create_tmux_session(cc_session_name, Path(first_context["path"]))
+
+    # Rename first window
+    run_cmd([
+        "tmux", "rename-window", "-t", f"{cc_session_name}:0", first_context["name"]
+    ])
+
+    # Create additional windows for remaining contexts
+    for context in contexts_data[1:]:
+        run_cmd([
+            "tmux", "new-window", "-t", cc_session_name,
+            "-n", context["name"], "-c", context["path"]
+        ])
+
+    # Select window 0 before attaching
+    run_cmd(["tmux", "select-window", "-t", f"{cc_session_name}:0"])
+
+    typer.secho(f"Created control center with {len(contexts_data)} windows.", fg="green")
+    open_tmux_session(cc_session_name)
+
+
 def create_workspace_worktree(
     repo_path: Path, label: str, worktree_path: Path, base_branch: Optional[str] = None
 ):

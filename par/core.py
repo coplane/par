@@ -548,3 +548,60 @@ def open_control_center():
         })
 
     operations.open_control_center(active_contexts)
+
+def open_control_center_new():
+    """Create a new 'control-center' tmux session with separate windows for each par session."""
+
+    # Get all repository sessions across all repos
+    all_repo_sessions = _load_state()
+
+    # Get all workspace sessions across all directories
+    all_workspace_sessions = workspace._load_workspace_state()
+
+    # Collect all repositories to determine naming strategy
+    all_repos = set()
+
+    # Collect repo names from single-repo sessions
+    for repo_path, repo_sessions in all_repo_sessions.items():
+        repo_name = Path(repo_path).name
+        all_repos.add(repo_name)
+
+    # Collect repo names from workspace sessions
+    for workspace_dir, workspaces in all_workspace_sessions.items():
+        for ws_label, ws_data in workspaces.items():
+            for repo_data in ws_data.get("repos", []):
+                all_repos.add(repo_data['repo_name'])
+
+    # Determine if we need to include repo names (more than one unique repo)
+    include_repo_name = len(all_repos) > 1
+
+    # Prepare all contexts for control center
+    active_contexts = []
+
+    # Add all single-repo sessions
+    for repo_path, repo_sessions in all_repo_sessions.items():
+        repo_name = Path(repo_path).name
+        for label, data in repo_sessions.items():
+            name = f"{repo_name}-{label}" if include_repo_name else label
+            active_contexts.append({
+                "name": name,
+                "path": data["worktree_path"],
+                "type": "session"
+            })
+
+    # Add all workspace sessions - create separate windows for each repo in each workspace
+    for workspace_dir, workspaces in all_workspace_sessions.items():
+        for ws_label, ws_data in workspaces.items():
+            for repo_data in ws_data.get("repos", []):
+                name = f"{ws_label}-{repo_data['repo_name']}" if include_repo_name else ws_label
+                active_contexts.append({
+                    "name": name,
+                    "path": repo_data["worktree_path"],
+                    "type": "workspace"
+                })
+
+    if not active_contexts:
+        typer.secho("No sessions or workspaces to display.", fg="yellow")
+        return
+
+    operations.open_control_center_new(active_contexts)
