@@ -12,69 +12,55 @@ from rich.table import Table
 from . import initialization, operations, utils
 
 
-# Workspace state management
-def _get_workspace_state_file() -> Path:
-    return utils.get_data_dir() / "workspaces.json"
+# Simplified workspace management - now workspaces are just special sessions
+def _validate_workspace_label_unique(label: str) -> bool:
+    """Check if a workspace label is globally unique across all sessions."""
+    from . import core
+    return core._validate_label_unique(label)
 
 
-def _load_workspace_state() -> Dict[str, Any]:
-    state_file = _get_workspace_state_file()
-    if not state_file.exists():
-        return {}
-
-    try:
-        with open(state_file, "r") as f:
-            content = f.read().strip()
-            return json.loads(content) if content else {}
-    except json.JSONDecodeError:
-        typer.secho(
-            "Warning: Workspace state file corrupted. Starting fresh.", fg="yellow"
-        )
-        return {}
+def _add_workspace_session(workspace_data: Dict[str, Any]):
+    """Add a workspace as a special type of session to global state."""
+    from . import core
+    # Mark as workspace type and add to sessions (not separate workspace state)
+    workspace_data["session_type"] = "workspace"
+    core._add_session(workspace_data)
 
 
-def _save_workspace_state(state: Dict[str, Any]):
-    state_file = _get_workspace_state_file()
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(state_file, "w") as f:
-        json.dump(state, f, indent=2)
-
-
-def _get_workspace_key(workspace_root: Path) -> str:
-    return str(workspace_root.resolve())
-
-
-def _get_workspace_sessions(workspace_root: Path) -> Dict[str, Any]:
-    state = _load_workspace_state()
-    workspace_key = _get_workspace_key(workspace_root)
-    return state.get(workspace_key, {})
-
-
-def _update_workspace_sessions(workspace_root: Path, sessions: Dict[str, Any]):
-    state = _load_workspace_state()
-    workspace_key = _get_workspace_key(workspace_root)
-
-    if sessions:
-        state[workspace_key] = sessions
-    else:
-        state.pop(workspace_key, None)  # Remove empty workspace entries
-
-    _save_workspace_state(state)
+def _get_workspace_session(label: str) -> Optional[Dict[str, Any]]:
+    """Get a workspace session by label."""
+    from . import core
+    session = core._get_session(label)
+    if session and session.get("session_type") == "workspace":
+        return session
+    return None
 
 
 # Workspace operations
 def start_workspace_session(
-    label: str, repos: Optional[List[str]] = None, open_session: bool = False
+    label: str, workspace_path: Optional[str] = None, repos: Optional[List[str]] = None, open_session: bool = False
 ):
     """Start a new workspace with multiple repositories."""
-    current_dir = Path.cwd()
+    # Validate label is globally unique
+    if not _validate_workspace_label_unique(label):
+        typer.secho(f"Error: Label '{label}' already exists. Labels must be globally unique.", fg="red", err=True)
+        raise typer.Exit(1)
+    
+    # Resolve workspace directory
+    if workspace_path:
+        workspace_root = Path(workspace_path).resolve()
+        if not workspace_root.exists():
+            typer.secho(f"Error: Directory '{workspace_path}' does not exist.", fg="red", err=True)
+            raise typer.Exit(1)
+    else:
+        workspace_root = Path.cwd()
 
     # Auto-detect repos if not specified
     if not repos:
-        detected_repos = utils.detect_git_repos(current_dir)
+        detected_repos = utils.detect_git_repos(workspace_root)
         if not detected_repos:
             typer.secho(
-                "Error: No git repositories found in current directory.",
+                f"Error: No git repositories found in {workspace_root}.",
                 fg="red",
                 err=True,
             )
@@ -83,29 +69,34 @@ def start_workspace_session(
         repo_names = [repo.name for repo in detected_repos]
         repo_paths = detected_repos
     else:
-        repo_names = repos
+        repo_names = []
         repo_paths = []
-        for repo_name in repos:
-            repo_path = current_dir / repo_name
+        for repo_spec in repos:
+            # Support both absolute paths and relative names
+            if repo_spec.startswith('/') or Path(repo_spec).is_absolute():
+                # Absolute path provided
+                repo_path = Path(repo_spec).resolve()
+                repo_name = repo_path.name
+            else:
+                # Relative name provided (traditional behavior)
+                repo_name = repo_spec
+                repo_path = workspace_root / repo_name
+            
             if not repo_path.exists():
                 typer.secho(
-                    f"Error: Repository '{repo_name}' not found.", fg="red", err=True
+                    f"Error: Repository path '{repo_path}' does not exist.", fg="red", err=True
                 )
                 raise typer.Exit(1)
             if not (repo_path / ".git").exists():
                 typer.secho(
-                    f"Error: '{repo_name}' is not a git repository.", fg="red", err=True
+                    f"Error: '{repo_path}' is not a git repository.", fg="red", err=True
                 )
                 raise typer.Exit(1)
+            
+            repo_names.append(repo_name)
             repo_paths.append(repo_path)
 
-    # Check if workspace already exists
-    workspace_sessions = _get_workspace_sessions(current_dir)
-    if label in workspace_sessions:
-        typer.secho(f"Error: Workspace '{label}' already exists.", fg="red", err=True)
-        raise typer.Exit(1)
-
-    session_name = utils.get_workspace_session_name(current_dir, label)
+    session_name = utils.get_workspace_session_name(workspace_root, label)
 
     # Check for conflicts
     if operations.tmux_session_exists(session_name):
@@ -116,7 +107,7 @@ def start_workspace_session(
     repos_data = []
     for repo_path, repo_name in zip(repo_paths, repo_names):
         worktree_path = utils.get_workspace_worktree_path(
-            current_dir, label, repo_name, label
+            workspace_root, label, repo_name, label
         )
 
         # Check for conflicts
@@ -145,36 +136,38 @@ def start_workspace_session(
             }
         )
 
-    # Create tmux session with multiple panes
-    operations.create_workspace_tmux_session(session_name, repos_data)
+    # Calculate workspace root directory
+    first_worktree_path = Path(repos_data[0]["worktree_path"])
+    workspace_root = first_worktree_path.parent.parent
+    
+    # Create simple tmux session starting from workspace root  
+    operations.create_tmux_session(session_name, workspace_root)
 
     # Run initialization for each repository if .par.yaml exists
-    has_initialization = False
     for repo_data in repos_data:
         repo_path = Path(repo_data["repo_path"])
         worktree_path = Path(repo_data["worktree_path"])
         config = initialization.load_par_config(repo_path)
         if config:
+            # Run initialization but don't change tmux working directory
             initialization.run_initialization(
                 config, session_name, worktree_path, workspace_mode=True
             )
-            has_initialization = True
 
-    # Return to workspace root after initialization
-    if has_initialization:
-        # Calculate the actual workspace root directory (parent of all repo worktrees)
-        first_worktree_path = Path(repos_data[0]["worktree_path"])
-        workspace_root = first_worktree_path.parent.parent
-        operations.send_tmux_keys(session_name, f"cd {workspace_root}")
-
-    # Update state
-    workspace_sessions[label] = {
-        "session_name": session_name,
-        "repos": repos_data,
+    # Create workspace session data for global state
+    # Workspaces are now stored as special sessions, not separate entities
+    workspace_data = {
+        "label": label,
+        "repository_path": str(workspace_root),  # Use workspace root as "repository"
+        "repository_name": f"workspace-{label}",
+        "worktree_path": str(workspace_root),  # tmux session runs from workspace root
+        "tmux_session_name": session_name,
+        "branch_name": label,  # All repos get this branch name
         "created_at": datetime.datetime.utcnow().isoformat(),
-        "workspace_root": str(current_dir),
+        "session_type": "workspace",
+        "workspace_repos": repos_data,  # Store repo info for workspace-specific operations
     }
-    _update_workspace_sessions(current_dir, workspace_sessions)
+    _add_workspace_session(workspace_data)
 
     typer.secho(
         f"Successfully started workspace '{label}' with {len(repos_data)} repositories.",
@@ -184,34 +177,36 @@ def start_workspace_session(
     for repo_data in repos_data:
         typer.echo(f"  {repo_data['repo_name']}: {repo_data['worktree_path']}")
     typer.echo(f"  Session: {session_name}")
-    typer.echo(f"To open: par workspace open {label}")
+    typer.echo(f"To open: par open {label}")  # Now works with global open command
 
     if open_session:
         open_workspace_session(label)
 
 
 def list_workspace_sessions():
-    """List all workspace sessions for the current directory."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
+    """List all workspace sessions globally (now shown in main par ls)."""
+    from . import core
+    all_sessions = core._get_all_sessions()
+    workspace_sessions = {k: v for k, v in all_sessions.items() if v.get("session_type") == "workspace"}
 
     if not workspace_sessions:
-        typer.secho("No workspace sessions found for this directory.", fg="yellow")
+        typer.secho("No workspace sessions found.", fg="yellow")
+        typer.echo("Workspaces are now shown in 'par ls' alongside regular sessions.")
         return
 
     console = Console()
-    table = Table(show_header=True, header_style="bold magenta")
+    table = Table(show_header=True, header_style="bold magenta", title="Workspace Sessions")
     table.add_column("Label", style="cyan", no_wrap=True)
     table.add_column("Repositories", style="green")
-    table.add_column("Session", style="blue", no_wrap=True)
+    table.add_column("Session", style="magenta", no_wrap=True)
     table.add_column("Created", style="dim")
 
     for label, data in workspace_sessions.items():
-        repos = ", ".join([repo["repo_name"] for repo in data["repos"]])
-        session_name = data["session_name"]
+        repos_info = data.get("workspace_repos", [])
+        repos = ", ".join([repo["repo_name"] for repo in repos_info])
+        session_name = data["tmux_session_name"]
         created = data.get("created_at", "Unknown")
         if created != "Unknown":
-            # Format datetime to be more readable
             try:
                 dt = datetime.datetime.fromisoformat(created)
                 created = dt.strftime("%Y-%m-%d %H:%M")
@@ -221,72 +216,26 @@ def list_workspace_sessions():
         table.add_row(label, repos, session_name, created)
 
     console.print(table)
+    typer.echo("\nTip: Use 'par ls' to see all sessions including workspaces together.")
 
 
 def open_workspace_session(label: str):
-    """Open/attach to a specific workspace session."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
-
-    if label not in workspace_sessions:
-        typer.secho(f"Error: Workspace '{label}' not found.", fg="red", err=True)
-        raise typer.Exit(1)
-
-    session_data = workspace_sessions[label]
-    session_name = session_data["session_name"]
-
-    # Ensure session exists, recreate if needed
-    if not operations.tmux_session_exists(session_name):
-        typer.secho(f"Recreating workspace session for '{label}'...", fg="yellow")
-        operations.create_workspace_tmux_session(session_name, session_data["repos"])
-
-    operations.open_tmux_session(session_name)
+    """Open/attach to a workspace session (now handled by core.open_session)."""
+    # Delegate to core.open_session since workspaces are now regular sessions
+    from . import core
+    core.open_session(label)
 
 
 def remove_workspace_session(label: str):
-    """Remove a specific workspace session."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
-
-    if label not in workspace_sessions:
-        typer.secho(f"Error: Workspace '{label}' not found.", fg="red", err=True)
-        raise typer.Exit(1)
-
-    session_data = workspace_sessions[label]
-    session_name = session_data["session_name"]
-
-    # Kill tmux session
-    operations.kill_tmux_session(session_name)
-
-    # Remove worktrees and branches for each repo
-    for repo_data in session_data["repos"]:
-        repo_path = Path(repo_data["repo_path"])
-        worktree_path = Path(repo_data["worktree_path"])
-        branch_name = repo_data["branch_name"]
-
-        operations.remove_workspace_worktree(repo_path, worktree_path)
-        operations.delete_workspace_branch(repo_path, branch_name)
-
-    # Remove workspace directory if empty
-    if session_data["repos"]:
-        first_worktree_path = Path(session_data["repos"][0]["worktree_path"])
-        workspace_dir = first_worktree_path.parent.parent
-        try:
-            workspace_dir.rmdir()  # Only removes if empty
-        except OSError:
-            pass  # Directory not empty or doesn't exist
-
-    # Update state
-    del workspace_sessions[label]
-    _update_workspace_sessions(current_dir, workspace_sessions)
-
-    typer.secho(f"Successfully removed workspace '{label}'.", fg="green")
+    """Remove a workspace session (now handled by core.remove_session)."""
+    # Delegate to core.remove_session since workspaces are now regular sessions
+    from . import core
+    core.remove_session(label)
 
 
 def remove_all_workspace_sessions():
-    """Remove all workspace sessions for the current directory."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
+    """Remove all workspace sessions globally."""
+    workspace_sessions = _get_all_workspaces()
 
     if not workspace_sessions:
         typer.secho("No workspace sessions to remove.", fg="yellow")
@@ -296,7 +245,8 @@ def remove_all_workspace_sessions():
     labels = list(workspace_sessions.keys())
     typer.echo(f"This will remove {len(labels)} workspace sessions:")
     for label in labels:
-        typer.echo(f"  - {label}")
+        workspace_root = Path(workspace_sessions[label]["workspace_root"]).name
+        typer.echo(f"  - {label} ({workspace_root})")
 
     if not typer.confirm("Are you sure?"):
         typer.echo("Cancelled.")
@@ -315,15 +265,13 @@ def remove_all_workspace_sessions():
 
 def open_workspace_in_ide(label: str, ide: str):
     """Open a workspace in the specified IDE."""
-    current_dir = Path.cwd()
-    workspace_sessions = _get_workspace_sessions(current_dir)
-
-    if label not in workspace_sessions:
+    workspace_data = _get_workspace(label)
+    
+    if not workspace_data:
         typer.secho(f"Error: Workspace '{label}' not found.", fg="red", err=True)
         raise typer.Exit(1)
 
-    session_data = workspace_sessions[label]
-    repos_data = session_data["repos"]
+    repos_data = workspace_data["repos"]
 
     # Generate and save workspace file
     workspace_file = utils.save_vscode_workspace_file(label, repos_data)

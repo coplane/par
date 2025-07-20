@@ -13,64 +13,176 @@ from rich.table import Table
 from . import checkout, initialization, operations, utils, workspace
 
 
-# State management - simplified from SessionManager class
-def _get_state_file() -> Path:
-    return utils.get_data_dir() / "state.json"
+# Global state management
+def _get_global_state_file() -> Path:
+    return utils.get_data_dir() / "global_state.json"
 
 
-def _load_state() -> Dict[str, Any]:
-    state_file = _get_state_file()
+def _load_global_state() -> Dict[str, Any]:
+    state_file = _get_global_state_file()
     if not state_file.exists():
-        return {}
+        # Try to migrate from old state files
+        migrated_state = _migrate_legacy_state()
+        if migrated_state:
+            _save_global_state(migrated_state)
+            return migrated_state
+        return {"sessions": {}, "workspaces": {}}
 
     try:
         with open(state_file, "r") as f:
             content = f.read().strip()
-            return json.loads(content) if content else {}
+            state = json.loads(content) if content else {}
+            # Ensure structure exists
+            if "sessions" not in state:
+                state["sessions"] = {}
+            if "workspaces" not in state:
+                state["workspaces"] = {}
+            return state
     except json.JSONDecodeError:
-        typer.secho("Warning: State file corrupted. Starting fresh.", fg="yellow")
-        return {}
+        typer.secho("Warning: Global state file corrupted. Starting fresh.", fg="yellow")
+        return {"sessions": {}, "workspaces": {}}
 
 
-def _save_state(state: Dict[str, Any]):
-    state_file = _get_state_file()
+def _save_global_state(state: Dict[str, Any]):
+    state_file = _get_global_state_file()
     state_file.parent.mkdir(parents=True, exist_ok=True)
     with open(state_file, "w") as f:
         json.dump(state, f, indent=2)
 
 
-def _get_repo_key() -> str:
-    return str(utils.get_git_repo_root().resolve())
+def _migrate_legacy_state() -> Dict[str, Any]:
+    """Migrate from old per-repo state files to global state."""
+    legacy_state_file = utils.get_data_dir() / "state.json"
+    legacy_workspace_file = utils.get_data_dir() / "workspaces.json"
+    
+    migrated = {"sessions": {}, "workspaces": {}}
+    
+    # Migrate legacy sessions
+    if legacy_state_file.exists():
+        try:
+            with open(legacy_state_file, "r") as f:
+                content = f.read().strip()
+                legacy_state = json.loads(content) if content else {}
+                
+            for repo_path, repo_sessions in legacy_state.items():
+                repo_path_obj = Path(repo_path)
+                repo_name = repo_path_obj.name
+                
+                for label, session_data in repo_sessions.items():
+                    # Create globally unique label if collision
+                    global_label = label
+                    counter = 1
+                    while global_label in migrated["sessions"]:
+                        global_label = f"{label}-{repo_name.lower()}-{counter}"
+                        counter += 1
+                    
+                    migrated["sessions"][global_label] = {
+                        "label": global_label,
+                        "repository_path": repo_path,
+                        "repository_name": repo_name,
+                        "worktree_path": session_data["worktree_path"],
+                        "tmux_session_name": session_data["tmux_session_name"],
+                        "branch_name": session_data["branch_name"],
+                        "created_at": session_data["created_at"],
+                        "session_type": "checkout" if session_data.get("is_checkout") else "session",
+                        "checkout_target": session_data.get("checkout_target")
+                    }
+        except (json.JSONDecodeError, FileNotFoundError):
+            pass
+    
+    # Migrate legacy workspaces
+    if legacy_workspace_file.exists():
+        try:
+            with open(legacy_workspace_file, "r") as f:
+                content = f.read().strip()
+                legacy_workspaces = json.loads(content) if content else {}
+                
+            for workspace_root, workspace_sessions in legacy_workspaces.items():
+                for label, workspace_data in workspace_sessions.items():
+                    # Create globally unique label if collision
+                    global_label = label
+                    counter = 1
+                    while (global_label in migrated["sessions"] or 
+                           global_label in migrated["workspaces"]):
+                        workspace_name = Path(workspace_root).name
+                        global_label = f"{label}-{workspace_name.lower()}-{counter}"
+                        counter += 1
+                    
+                    migrated["workspaces"][global_label] = {
+                        "label": global_label,
+                        "workspace_root": workspace_data["workspace_root"],
+                        "session_name": workspace_data["session_name"],
+                        "repos": workspace_data["repos"],
+                        "created_at": workspace_data["created_at"]
+                    }
+        except (json.JSONDecodeError, FileNotFoundError):
+            pass
+    
+    # If we migrated anything, backup the old files
+    if migrated["sessions"] or migrated["workspaces"]:
+        backup_dir = utils.get_data_dir() / "backup"
+        backup_dir.mkdir(exist_ok=True)
+        
+        if legacy_state_file.exists():
+            shutil.copy2(legacy_state_file, backup_dir / "state.json.backup")
+        if legacy_workspace_file.exists():
+            shutil.copy2(legacy_workspace_file, backup_dir / "workspaces.json.backup")
+            
+        typer.secho(f"Migrated legacy state files. Backups saved to {backup_dir}", fg="green")
+    
+    return migrated
 
 
-def _get_repo_sessions() -> Dict[str, Any]:
-    state = _load_state()
-    repo_key = _get_repo_key()
-    return state.get(repo_key, {})
+def _validate_label_unique(label: str) -> bool:
+    """Check if a label is globally unique across sessions and workspaces."""
+    state = _load_global_state()
+    return label not in state["sessions"] and label not in state["workspaces"]
 
 
-def _update_repo_sessions(sessions: Dict[str, Any]):
-    state = _load_state()
-    repo_key = _get_repo_key()
-
-    if sessions:
-        state[repo_key] = sessions
-    else:
-        state.pop(repo_key, None)  # Remove empty repo entries
-
-    _save_state(state)
+def _get_all_sessions() -> Dict[str, Any]:
+    """Get all sessions globally."""
+    state = _load_global_state()
+    return state["sessions"]
 
 
-# Session operations - simplified from actions.py
-def start_session(label: str, open_session: bool = False):
+# Workspaces are now stored as sessions with session_type="workspace"
+
+
+def _add_session(session_data: Dict[str, Any]):
+    """Add a session to global state."""
+    state = _load_global_state()
+    state["sessions"][session_data["label"]] = session_data
+    _save_global_state(state)
+
+
+def _remove_session(label: str):
+    """Remove a session from global state."""
+    state = _load_global_state()
+    if label in state["sessions"]:
+        del state["sessions"][label]
+        _save_global_state(state)
+
+
+def _get_session(label: str) -> Optional[Dict[str, Any]]:
+    """Get a specific session by label."""
+    state = _load_global_state()
+    return state["sessions"].get(label)
+
+
+
+
+# Session operations - now globally scoped
+def start_session(label: str, repo_path: Optional[str] = None, open_session: bool = False):
     """Start a new git worktree and tmux session."""
-    sessions = _get_repo_sessions()
-
-    if label in sessions:
-        typer.secho(f"Error: Session '{label}' already exists.", fg="red", err=True)
+    # Validate label is globally unique
+    if not _validate_label_unique(label):
+        typer.secho(f"Error: Label '{label}' already exists. Labels must be globally unique.", fg="red", err=True)
         raise typer.Exit(1)
 
-    repo_root = utils.get_git_repo_root()
+    # Resolve repository path
+    repo_root = utils.resolve_repository_path(repo_path)
+    repo_name = repo_root.name
+    
     worktree_path = utils.get_worktree_path(repo_root, label)
     session_name = utils.get_tmux_session_name(repo_root, label)
 
@@ -86,7 +198,7 @@ def start_session(label: str, open_session: bool = False):
         raise typer.Exit(1)
 
     # Create resources
-    operations.create_worktree(label, worktree_path)
+    operations.create_worktree(label, worktree_path, repo_root)
     operations.create_tmux_session(session_name, worktree_path)
 
     # Run includes and initialization if .par.yaml exists
@@ -95,18 +207,23 @@ def start_session(label: str, open_session: bool = False):
         initialization.copy_included_files(config, repo_root, worktree_path)
         initialization.run_initialization(config, session_name, worktree_path)
 
-    # Update state
-    sessions[label] = {
+    # Create session data for global state
+    session_data = {
+        "label": label,
+        "repository_path": str(repo_root),
+        "repository_name": repo_name,
         "worktree_path": str(worktree_path),
         "tmux_session_name": session_name,
         "branch_name": label,
         "created_at": datetime.datetime.utcnow().isoformat(),
+        "session_type": "session"
     }
-    _update_repo_sessions(sessions)
+    _add_session(session_data)
 
     typer.secho(
-        f"Successfully started session '{label}'.", fg="bright_green", bold=True
+        f"Successfully started session '{label}' in {repo_name}.", fg="bright_green", bold=True
     )
+    typer.echo(f"  Repository: {repo_root}")
     typer.echo(f"  Worktree: {worktree_path}")
     typer.echo(f"  Branch: {label}")
     typer.echo(f"  Session: {session_name}")
@@ -120,23 +237,38 @@ def start_session(label: str, open_session: bool = False):
 
 def remove_session(label: str):
     """Remove a session and clean up all resources."""
-    sessions = _get_repo_sessions()
-    session_data = sessions.get(label)
+    session_data = _get_session(label)
 
     if not session_data:
-        # Attempt cleanup of stale resources
-        typer.secho(f"Warning: Session '{label}' not found in state.", fg="yellow")
-        typer.echo("Attempting cleanup of stale artifacts...")
-        _cleanup_stale_resources(label)
-        return
+        typer.secho(f"Error: Session '{label}' not found.", fg="red", err=True)
+        raise typer.Exit(1)
 
+    session_type = session_data.get("session_type", "session")
+    
+    # Handle workspace sessions differently
+    if session_type == "workspace":
+        _remove_workspace_session(session_data)
+    else:
+        _remove_regular_session(session_data)
+
+    # Remove from global state
+    _remove_session(label)
+
+    typer.secho(
+        f"Successfully removed {session_type} '{label}'.", fg="bright_green", bold=True
+    )
+
+
+def _remove_regular_session(session_data: Dict[str, Any]):
+    """Remove a regular session (not workspace)."""
     # Clean up resources
     operations.kill_tmux_session(session_data["tmux_session_name"])
-    operations.remove_worktree(Path(session_data["worktree_path"]))
+    repo_root = Path(session_data["repository_path"])
+    operations.remove_worktree(Path(session_data["worktree_path"]), repo_root)
 
     # Only delete branch if it was created by par (not checkout)
-    if not session_data.get("is_checkout", False):
-        operations.delete_branch(session_data["branch_name"])
+    if session_data.get("session_type") != "checkout":
+        operations.delete_branch(session_data["branch_name"], repo_root)
 
     # Remove physical directory if it exists and is managed by par
     worktree_path = Path(session_data["worktree_path"])
@@ -148,139 +280,137 @@ def remove_session(label: str):
                 f"Warning: Could not remove directory {worktree_path}: {e}", fg="yellow"
             )
 
-    # Update state
-    del sessions[label]
-    _update_repo_sessions(sessions)
 
-    typer.secho(
-        f"Successfully removed session '{label}'.", fg="bright_green", bold=True
-    )
+def _remove_workspace_session(session_data: Dict[str, Any]):
+    """Remove a workspace session and all its repositories."""
+    # Kill tmux session
+    operations.kill_tmux_session(session_data["tmux_session_name"])
+
+    # Remove worktrees and branches for each repo in the workspace
+    repos_data = session_data.get("workspace_repos", [])
+    for repo_data in repos_data:
+        repo_path = Path(repo_data["repo_path"])
+        worktree_path = Path(repo_data["worktree_path"])
+        branch_name = repo_data["branch_name"]
+
+        operations.remove_worktree(worktree_path, repo_path)
+        operations.delete_branch(branch_name, repo_path)
+
+    # Remove workspace directory if it exists and is managed by par
+    workspace_root = Path(session_data["repository_path"])
+    if workspace_root.exists() and utils.get_data_dir() in workspace_root.parents:
+        try:
+            shutil.rmtree(workspace_root)
+        except OSError as e:
+            typer.secho(
+                f"Warning: Could not remove workspace directory {workspace_root}: {e}", fg="yellow"
+            )
 
 
-def _cleanup_stale_resources(label: str):
-    """Clean up stale resources that might exist without state."""
-    repo_root = utils.get_git_repo_root()
-    stale_worktree = utils.get_worktree_path(repo_root, label)
-    stale_session = utils.get_tmux_session_name(repo_root, label)
-
-    operations.kill_tmux_session(stale_session)
-    operations.remove_worktree(stale_worktree)
-    operations.delete_branch(label)
-
-    typer.secho(f"Cleanup attempt for '{label}' finished.", fg="cyan")
+def _get_workspace(label: str) -> Optional[Dict[str, Any]]:
+    """Get a specific workspace by label."""
+    state = _load_global_state()
+    return state["workspaces"].get(label)
 
 
 def remove_all_sessions():
-    """Remove all sessions for the current repository."""
-    sessions = _get_repo_sessions()
-
+    """Remove all sessions (including workspaces) globally."""
+    sessions = _get_all_sessions()
+    
     if not sessions:
         typer.secho("No sessions to remove.", fg="yellow")
         return
 
-    typer.confirm(f"Remove all {len(sessions)} sessions?", abort=True)
+    # Separate regular sessions from workspaces for display
+    regular_sessions = {k: v for k, v in sessions.items() if v.get("session_type") != "workspace"}
+    workspace_sessions = {k: v for k, v in sessions.items() if v.get("session_type") == "workspace"}
+    
+    typer.echo(f"This will remove {len(regular_sessions)} sessions and {len(workspace_sessions)} workspaces:")
+    for label in regular_sessions:
+        typer.echo(f"  Session: {label}")
+    for label in workspace_sessions:
+        typer.echo(f"  Workspace: {label}")
+        
+    typer.confirm(f"Remove all {len(sessions)} items?", abort=True)
 
+    # Remove all sessions (including workspaces)
     for label in list(sessions.keys()):
-        typer.echo(f"Removing session '{label}'...")
+        session_type = sessions[label].get("session_type", "session")
+        typer.echo(f"Removing {session_type} '{label}'...")
         remove_session(label)
 
     typer.secho("All sessions removed.", fg="bright_green", bold=True)
 
 
 def send_command(target: str, command: str):
-    """Send a command to session(s)."""
-    sessions = _get_repo_sessions()
+    """Send a command to session(s) (including workspaces)."""
+    sessions = _get_all_sessions()
 
     if target.lower() == "all":
         if not sessions:
             typer.secho("No active sessions.", fg="yellow")
             return
 
-        for session_data in sessions.values():
+        # Send to all sessions (including workspaces)
+        for label, session_data in sessions.items():
             session_name = session_data["tmux_session_name"]
-            typer.echo(f"Sending to '{session_data.get('label', 'unknown')}'...")
+            session_type = session_data.get("session_type", "session")
+            typer.echo(f"Sending to {session_type} '{label}'...")
             operations.send_tmux_keys(session_name, command)
     else:
+        # Find target session (could be regular session or workspace)
         session_data = sessions.get(target)
-        if not session_data:
+        if session_data:
+            session_name = session_data["tmux_session_name"]
+            session_type = session_data.get("session_type", "session")
+            typer.echo(f"Sending to {session_type} '{target}'...")
+            operations.send_tmux_keys(session_name, command)
+        else:
             typer.secho(f"Error: Session '{target}' not found.", fg="red", err=True)
             raise typer.Exit(1)
 
-        session_name = session_data["tmux_session_name"]
-        typer.echo(f"Sending to '{target}'...")
-        operations.send_tmux_keys(session_name, command)
-
 
 def list_sessions():
-    """List all sessions and workspaces for the current repository."""
+    """List all sessions and workspaces globally."""
+    sessions = _get_all_sessions()
 
-    sessions = _get_repo_sessions()
-    current_repo_root = utils.get_git_repo_root()
-    current_repo_name = current_repo_root.name
-
-    # Get workspaces that contain this repository
-    relevant_workspaces = []
-    current_dir = current_repo_root.parent  # Go up to find workspace directories
-    workspace_sessions = workspace._get_workspace_sessions(current_dir)
-
-    for ws_label, ws_data in workspace_sessions.items():
-        # Check if this workspace contains the current repository
-        for repo_data in ws_data.get("repos", []):
-            if repo_data["repo_name"] == current_repo_name:
-                relevant_workspaces.append((ws_label, ws_data, repo_data))
-                break
-
-    if not sessions and not relevant_workspaces:
-        typer.secho(
-            "No active sessions or workspaces for this repository.", fg="yellow"
-        )
+    if not sessions:
+        typer.secho("No active sessions or workspaces.", fg="yellow")
         return
 
     console = Console()
-    table = Table(title=f"Par Development Contexts for {current_repo_name}")
+    table = Table(title="Par Development Contexts (Global)")
     table.add_column("Label", style="cyan", no_wrap=True)
     table.add_column("Type", style="bold blue", no_wrap=True)
+    table.add_column("Repository/Workspace", style="green")
     table.add_column("Tmux Session", style="magenta")
-    table.add_column("Branch", style="green")
-    table.add_column("Other Repos", style="yellow")
+    table.add_column("Branch", style="yellow")
     table.add_column("Created", style="dim")
 
-    # Add single-repo sessions
+    # Add all sessions (including workspaces)
     for label, data in sorted(sessions.items()):
         session_active = (
             "✅" if operations.tmux_session_exists(data["tmux_session_name"]) else "❌"
         )
 
+        session_type = data.get("session_type", "session")
+        
+        if session_type == "workspace":
+            # Display workspace info
+            workspace_repos = data.get("workspace_repos", [])
+            repo_names = [repo["repo_name"] for repo in workspace_repos]
+            repo_display = f"workspace ({len(repo_names)} repos: {', '.join(repo_names)})"
+        else:
+            # Display regular session info
+            repo_display = f"{data['repository_name']} ({Path(data['repository_path']).parent.name})"
+        
         table.add_row(
             label,
-            "Session",
+            session_type.title(),
+            repo_display,
             f"{data['tmux_session_name']} ({session_active})",
             data["branch_name"],
-            "-",
             data["created_at"][:16],  # Just date and time
-        )
-
-    # Add relevant workspaces
-    for ws_label, ws_data, repo_data in sorted(relevant_workspaces):
-        session_active = (
-            "✅" if operations.tmux_session_exists(ws_data["session_name"]) else "❌"
-        )
-
-        # Get other repos in this workspace
-        other_repos = [
-            r["repo_name"]
-            for r in ws_data.get("repos", [])
-            if r["repo_name"] != current_repo_name
-        ]
-        other_repos_str = ", ".join(other_repos) if other_repos else "-"
-
-        table.add_row(
-            ws_label,
-            "Workspace",
-            f"{ws_data['session_name']} ({session_active})",
-            repo_data["branch_name"],
-            other_repos_str,
-            ws_data["created_at"][:16],
         )
 
     console.print(table)
@@ -288,13 +418,9 @@ def list_sessions():
 
 def open_session(label: str):
     """Open/attach to a specific session or workspace."""
-
-    # First try single-repo sessions
-    sessions = _get_repo_sessions()
-    session_data = sessions.get(label)
-
+    # Try sessions first
+    session_data = _get_session(label)
     if session_data:
-        # Handle single-repo session
         session_name = session_data["tmux_session_name"]
 
         if not operations.tmux_session_exists(session_name):
@@ -307,12 +433,8 @@ def open_session(label: str):
         return
 
     # Try workspaces
-    current_repo_root = utils.get_git_repo_root()
-    current_dir = current_repo_root.parent
-    workspace_sessions = workspace._get_workspace_sessions(current_dir)
-
-    if label in workspace_sessions:
-        # Handle workspace
+    workspace_data = _get_workspace(label)
+    if workspace_data:
         workspace.open_workspace_session(label)
         return
 
@@ -320,10 +442,8 @@ def open_session(label: str):
     raise typer.Exit(1)
 
 
-def checkout_session(target: str, custom_label: Optional[str] = None):
+def checkout_session(target: str, custom_label: Optional[str] = None, repo_path: Optional[str] = None):
     """Checkout existing branch or PR into new session."""
-    sessions = _get_repo_sessions()
-
     try:
         # Parse target to determine branch name and checkout strategy
         branch_name, strategy = checkout.parse_checkout_target(target)
@@ -334,11 +454,15 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
     # Generate label (custom or derived from branch name)
     label = custom_label or branch_name
 
-    if label in sessions:
-        typer.secho(f"Error: Session '{label}' already exists.", fg="red", err=True)
+    # Validate label is globally unique
+    if not _validate_label_unique(label):
+        typer.secho(f"Error: Label '{label}' already exists. Labels must be globally unique.", fg="red", err=True)
         raise typer.Exit(1)
 
-    repo_root = utils.get_git_repo_root()
+    # Resolve repository path
+    repo_root = utils.resolve_repository_path(repo_path)
+    repo_name = repo_root.name
+    
     worktree_path = utils.get_worktree_path(repo_root, label)
     session_name = utils.get_tmux_session_name(repo_root, label)
 
@@ -354,7 +478,7 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
         raise typer.Exit(1)
 
     # Create worktree from existing branch (no new branch creation)
-    operations.checkout_worktree(branch_name, worktree_path, strategy)
+    operations.checkout_worktree(branch_name, worktree_path, strategy, repo_root)
     operations.create_tmux_session(session_name, worktree_path)
 
     # Run includes and initialization if .par.yaml exists
@@ -365,22 +489,26 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
             config, session_name, worktree_path
         )
 
-    # Update state
-    sessions[label] = {
+    # Create session data for global state
+    session_data = {
+        "label": label,
+        "repository_path": str(repo_root),
+        "repository_name": repo_name,
         "worktree_path": str(worktree_path),
         "tmux_session_name": session_name,
         "branch_name": branch_name,
         "created_at": datetime.datetime.utcnow().isoformat(),
-        "checkout_target": target,  # Remember original target
-        "is_checkout": True,  # Mark as checkout vs start
+        "session_type": "checkout",
+        "checkout_target": target
     }
-    _update_repo_sessions(sessions)
+    _add_session(session_data)
 
     typer.secho(
-        f"Successfully checked out '{target}' as session '{label}'.",
+        f"Successfully checked out '{target}' as session '{label}' in {repo_name}.",
         fg="bright_green",
         bold=True,
     )
+    typer.echo(f"  Repository: {repo_root}")
     typer.echo(f"  Worktree: {worktree_path}")
     typer.echo(f"  Branch: {branch_name}")
     typer.echo(f"  Session: {session_name}")
@@ -388,53 +516,35 @@ def checkout_session(target: str, custom_label: Optional[str] = None):
 
 
 def open_control_center():
-    """Open all sessions and workspaces in a tiled tmux layout."""
+    """Open all sessions (including workspaces) in a tiled tmux layout."""
+    sessions = _get_all_sessions()
 
-    sessions = _get_repo_sessions()
-    current_repo_root = utils.get_git_repo_root()
-    current_repo_name = current_repo_root.name
-
-    # Get workspaces that contain this repository
-    current_dir = current_repo_root.parent
-    workspace_sessions = workspace._get_workspace_sessions(current_dir)
-    relevant_workspaces = []
-
-    for ws_label, ws_data in workspace_sessions.items():
-        # Check if this workspace contains the current repository
-        for repo_data in ws_data.get("repos", []):
-            if repo_data["repo_name"] == current_repo_name:
-                relevant_workspaces.append((ws_label, ws_data))
-                break
-
-    if not sessions and not relevant_workspaces:
-        typer.secho("No sessions or workspaces to display.", fg="yellow")
+    if not sessions:
+        typer.secho("No sessions to display.", fg="yellow")
         return
 
     # Prepare all contexts for control center
     active_contexts = []
 
-    # Add single-repo sessions
+    # Add all sessions (including workspaces)
     for label, data in sessions.items():
         session_name = data["tmux_session_name"]
+        session_type = data.get("session_type", "session")
+        
         if not operations.tmux_session_exists(session_name):
-            typer.secho(f"Recreating session for '{label}'...", fg="yellow")
-            operations.create_tmux_session(session_name, Path(data["worktree_path"]))
-        active_contexts.append(data)
-
-    # Add workspace sessions
-    for ws_label, ws_data in relevant_workspaces:
-        session_name = ws_data["session_name"]
-        if not operations.tmux_session_exists(session_name):
-            typer.secho(
-                f"Recreating workspace session for '{ws_label}'...", fg="yellow"
-            )
-            operations.create_workspace_tmux_session(session_name, ws_data["repos"])
-
-        # Convert workspace data to match session data format for control center
-        workspace_context = {
+            typer.secho(f"Recreating {session_type} '{label}'...", fg="yellow")
+            
+            if session_type == "workspace":
+                # For workspaces, recreate from workspace root
+                workspace_root = Path(data["repository_path"])
+                operations.create_tmux_session(session_name, workspace_root)
+            else:
+                # For regular sessions, recreate from worktree path
+                operations.create_tmux_session(session_name, Path(data["worktree_path"]))
+        
+        active_contexts.append({
             "tmux_session_name": session_name,
-            "worktree_path": ws_data.get("workspace_root", ""),  # Use workspace root
-        }
-        active_contexts.append(workspace_context)
+            "worktree_path": data["worktree_path"]
+        })
 
     operations.open_control_center(active_contexts)

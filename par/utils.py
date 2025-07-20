@@ -187,3 +187,39 @@ def get_workspace_file_path(workspace_root: Path, workspace_label: str) -> Path:
     workspace_dir = get_data_dir() / "workspaces" / workspace_id / workspace_label
     workspace_dir.mkdir(parents=True, exist_ok=True)
     return workspace_dir / f"{workspace_label}.code-workspace"
+
+
+def save_vscode_workspace_file(workspace_label: str, repos_data: List[Dict]) -> Path:
+    """Generate and save a VSCode workspace file."""
+    import json
+    
+    # Generate workspace configuration
+    workspace_config = generate_vscode_workspace(workspace_label, repos_data)
+    
+    # Determine workspace root from first repository
+    if repos_data:
+        first_repo_path = Path(repos_data[0]["repo_path"])
+        workspace_root = first_repo_path.parent
+    else:
+        workspace_root = Path.cwd()
+    
+    # Get file path and save
+    workspace_file = get_workspace_file_path(workspace_root, workspace_label)
+    
+    with open(workspace_file, "w") as f:
+        json.dump(workspace_config, f, indent=2)
+    
+    return workspace_file
+
+
+def resolve_repository_path(path: Optional[str] = None) -> Path:
+    """Resolve repository path from optional parameter or current directory."""
+    if path:
+        repo_path = Path(path).resolve()
+        if not (repo_path / ".git").exists():
+            import typer
+            typer.secho(f"Error: '{repo_path}' is not a git repository.", fg="red", err=True)
+            raise typer.Exit(1)
+        return repo_path
+    else:
+        return get_git_repo_root()
