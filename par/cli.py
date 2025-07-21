@@ -16,17 +16,9 @@ app = typer.Typer(
 def get_session_labels() -> List[str]:
     """Get list of all session and workspace labels for autocomplete."""
     try:
-        labels = []
-
-        # Add all sessions globally
+        # All sessions now include workspaces (with session_type="workspace")
         sessions = core._get_all_sessions()
-        labels.extend(sessions.keys())
-
-        # Add all workspaces globally 
-        workspaces = core._get_all_workspaces()
-        labels.extend(workspaces.keys())
-
-        return labels
+        return list(sessions.keys())
     except Exception:
         return []
 

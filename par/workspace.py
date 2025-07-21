@@ -196,6 +196,7 @@ def list_workspace_sessions():
         session_name = data["tmux_session_name"]
         created = data.get("created_at", "Unknown")
         if created != "Unknown":
+            # Format datetime to be more readable
             try:
                 dt = datetime.datetime.fromisoformat(created)
                 created = dt.strftime("%Y-%m-%d %H:%M")
