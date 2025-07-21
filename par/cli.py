@@ -193,8 +193,8 @@ def open(
 @app.command(name="control-center")
 def control_center():
     """
-    Open all 'par'-managed sessions in a tiled tmux window (control center view).
-    Must be run from within an existing tmux session.
+    Create a new 'control-center' tmux session with separate windows for each par session.
+    Must be run from outside tmux. Shows all sessions and workspaces globally.
     """
     core.open_control_center()
 
