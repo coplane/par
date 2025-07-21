@@ -110,6 +110,13 @@ cd par
 uv tool install .
 ```
 
+### Upgrade with uv
+
+```bash
+uv tool upgrade par-cli
+```
+
+
 ### Verify Installation
 
 ```bash
