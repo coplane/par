@@ -532,10 +532,8 @@ def open_control_center():
     for label, data in sessions.items():
         session_type = data.get("session_type", "session")
         if session_type == "workspace":
-            # For workspaces, collect all repo names
-            workspace_repos = data.get("workspace_repos", [])
-            for repo_data in workspace_repos:
-                all_repos.add(repo_data['repo_name'])
+            # For workspaces, just add the workspace name
+            all_repos.add(f"workspace-{label}")
         else:
             # For regular sessions, use repository name
             all_repos.add(data['repository_name'])
@@ -551,16 +549,14 @@ def open_control_center():
         session_type = data.get("session_type", "session")
 
         if session_type == "workspace":
-            # For workspaces, create separate windows for each repo
-            workspace_repos = data.get("workspace_repos", [])
-            for repo_data in workspace_repos:
-                repo_name = repo_data['repo_name']
-                name = f"{label}-{repo_name}" if include_repo_name else f"{label}-{repo_name}"
-                active_contexts.append({
-                    "name": name,
-                    "path": repo_data["worktree_path"],
-                    "type": "workspace"
-                })
+            # For workspaces, create single window starting from workspace root
+            workspace_root = data["repository_path"]  # This is the workspace root directory
+            name = f"workspace-{label}" if include_repo_name else label
+            active_contexts.append({
+                "name": name,
+                "path": workspace_root,
+                "type": "workspace"
+            })
         else:
             # For regular sessions, create single window
             repo_name = data['repository_name']

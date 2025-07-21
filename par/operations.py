@@ -198,6 +198,53 @@ def open_tmux_session(session_name: str):
             raise typer.Exit(1)
 
 
+def _update_control_center_windows(session_name: str, contexts_data: List[dict]):
+    """Update control center windows to match current contexts."""
+    # Get current windows in the control center session
+    try:
+        result = run_cmd([
+            "tmux", "list-windows", "-t", session_name, "-F", "#{window_index}:#{window_name}"
+        ], capture=True)
+        current_windows = {}
+        for line in result.stdout.strip().split('\n'):
+            if ':' in line:
+                index, name = line.split(':', 1)
+                current_windows[name] = int(index)
+    except Exception:
+        # If we can't get windows, fall back to recreating the session
+        run_cmd(["tmux", "kill-session", "-t", session_name], check=False)
+        return False
+
+    # Build expected windows from contexts
+    expected_windows = {context["name"]: context for context in contexts_data}
+
+    # Remove windows that no longer exist
+    for window_name, window_index in current_windows.items():
+        if window_name not in expected_windows:
+            try:
+                run_cmd(["tmux", "kill-window", "-t", f"{session_name}:{window_index}"])
+            except Exception:
+                pass  # Window might already be gone
+
+    # Add or update windows for current contexts
+    existing_names = set(current_windows.keys())
+    for i, context in enumerate(contexts_data):
+        if context["name"] not in existing_names:
+            # Create new window
+            run_cmd([
+                "tmux", "new-window", "-t", session_name,
+                "-n", context["name"], "-c", context["path"]
+            ])
+        # If window exists, we could update its working directory, but tmux doesn't
+        # have a direct command for this. The window will retain its original path.
+
+    # Ensure we have at least one window and select the first one
+    if contexts_data:
+        run_cmd(["tmux", "select-window", "-t", f"{session_name}:^"], check=False)
+
+    return True
+
+
 def open_control_center(contexts_data: List[dict]):
     """Create a new 'control-center' tmux session with separate windows for each context."""
     _check_tmux()
@@ -217,10 +264,12 @@ def open_control_center(contexts_data: List[dict]):
     # Check if control center already exists
     if tmux_session_exists(cc_session_name):
         typer.secho(
-            f"Attaching to existing control center '{cc_session_name}'", fg="cyan"
+            f"Updating existing control center '{cc_session_name}' with current sessions", fg="cyan"
         )
-        open_tmux_session(cc_session_name)
-        return
+        if _update_control_center_windows(cc_session_name, contexts_data):
+            open_tmux_session(cc_session_name)
+            return
+        # If update failed, fall through to recreate the session
 
     # Create new control center session with first context
     first_context = contexts_data[0]
