@@ -52,7 +52,7 @@ par send all "git status"                  # Check status across ALL sessions gl
 ### 🎛️ **Global Control Center**
 
 ```bash
-par control-center        # View ALL sessions and workspaces globally in a tiled layout
+par control-center        # View ALL sessions and workspaces globally with separate windows
 ```
 
 ### 🏢 **Multi-Repository Workspaces**
@@ -76,7 +76,7 @@ par workspace open feature-auth     # Attach to unified tmux session
 
 - `par ls` - See all your development contexts (sessions + workspaces) in one table
 - `par open <label>` - Switch to any session or workspace
-- `par control-center` - View all contexts in a tiled tmux layout
+- `par control-center` - View all contexts in separate tmux windows
 - Tab completion works across both sessions and workspaces
 
 This eliminates the need to remember which type of development context you're working with - just use the label and `par` handles the rest!
@@ -229,15 +229,21 @@ par send all "npm test"      # Runs tests across all contexts
 
 ### Global Control Center
 
-View ALL development contexts simultaneously in a tiled tmux layout:
+View ALL development contexts simultaneously with dedicated tmux windows:
 
 ```bash
 par control-center    # Works from anywhere, shows everything
 ```
 
-Shows all sessions and workspaces across all repositories in separate panes, giving you a unified overview of your entire development workflow.
+Creates a unified `control-center` tmux session with separate windows for each development context (sessions and workspace repositories), giving you easy navigation across your entire development workflow.
 
-> **Note**: Must be run from outside tmux. Creates a global control center session with all contexts visible.
+> **Note**: Must be run from outside tmux. Creates a global control center session with dedicated windows for each context.
+
+**Benefits of the windowed approach:**
+- **Easy Navigation**: Use tmux window switching (`Ctrl-b + number` or `Ctrl-b + n/p`) to jump between contexts
+- **Clean Organization**: Each development context gets its own dedicated window with a descriptive name
+- **Scalable**: Works well with many sessions/workspaces (unlike tiled panes that become cramped)
+- **Workspace Support**: For multi-repo workspaces, each repository gets its own window
 
 ### Automatic Initialization with .par.yaml
 

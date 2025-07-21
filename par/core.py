@@ -54,20 +54,20 @@ def _migrate_legacy_state() -> Dict[str, Any]:
     """Migrate from old per-repo state files to global state."""
     legacy_state_file = utils.get_data_dir() / "state.json"
     legacy_workspace_file = utils.get_data_dir() / "workspaces.json"
-    
+
     migrated = {"sessions": {}, "workspaces": {}}
-    
+
     # Migrate legacy sessions
     if legacy_state_file.exists():
         try:
             with open(legacy_state_file, "r") as f:
                 content = f.read().strip()
                 legacy_state = json.loads(content) if content else {}
-                
+
             for repo_path, repo_sessions in legacy_state.items():
                 repo_path_obj = Path(repo_path)
                 repo_name = repo_path_obj.name
-                
+
                 for label, session_data in repo_sessions.items():
                     # Create globally unique label if collision
                     global_label = label
@@ -75,7 +75,7 @@ def _migrate_legacy_state() -> Dict[str, Any]:
                     while global_label in migrated["sessions"]:
                         global_label = f"{label}-{repo_name.lower()}-{counter}"
                         counter += 1
-                    
+
                     migrated["sessions"][global_label] = {
                         "label": global_label,
                         "repository_path": repo_path,
@@ -89,25 +89,25 @@ def _migrate_legacy_state() -> Dict[str, Any]:
                     }
         except (json.JSONDecodeError, FileNotFoundError):
             pass
-    
+
     # Migrate legacy workspaces
     if legacy_workspace_file.exists():
         try:
             with open(legacy_workspace_file, "r") as f:
                 content = f.read().strip()
                 legacy_workspaces = json.loads(content) if content else {}
-                
+
             for workspace_root, workspace_sessions in legacy_workspaces.items():
                 for label, workspace_data in workspace_sessions.items():
                     # Create globally unique label if collision
                     global_label = label
                     counter = 1
-                    while (global_label in migrated["sessions"] or 
+                    while (global_label in migrated["sessions"] or
                            global_label in migrated["workspaces"]):
                         workspace_name = Path(workspace_root).name
                         global_label = f"{label}-{workspace_name.lower()}-{counter}"
                         counter += 1
-                    
+
                     migrated["workspaces"][global_label] = {
                         "label": global_label,
                         "workspace_root": workspace_data["workspace_root"],
@@ -117,19 +117,19 @@ def _migrate_legacy_state() -> Dict[str, Any]:
                     }
         except (json.JSONDecodeError, FileNotFoundError):
             pass
-    
+
     # If we migrated anything, backup the old files
     if migrated["sessions"] or migrated["workspaces"]:
         backup_dir = utils.get_data_dir() / "backup"
         backup_dir.mkdir(exist_ok=True)
-        
+
         if legacy_state_file.exists():
             shutil.copy2(legacy_state_file, backup_dir / "state.json.backup")
         if legacy_workspace_file.exists():
             shutil.copy2(legacy_workspace_file, backup_dir / "workspaces.json.backup")
-            
+
         typer.secho(f"Migrated legacy state files. Backups saved to {backup_dir}", fg="green")
-    
+
     return migrated
 
 
@@ -182,7 +182,7 @@ def start_session(label: str, repo_path: Optional[str] = None, open_session: boo
     # Resolve repository path
     repo_root = utils.resolve_repository_path(repo_path)
     repo_name = repo_root.name
-    
+
     worktree_path = utils.get_worktree_path(repo_root, label)
     session_name = utils.get_tmux_session_name(repo_root, label)
 
@@ -244,7 +244,7 @@ def remove_session(label: str):
         raise typer.Exit(1)
 
     session_type = session_data.get("session_type", "session")
-    
+
     # Handle workspace sessions differently
     if session_type == "workspace":
         _remove_workspace_session(session_data)
@@ -316,7 +316,7 @@ def _get_workspace(label: str) -> Optional[Dict[str, Any]]:
 def remove_all_sessions():
     """Remove all sessions (including workspaces) globally."""
     sessions = _get_all_sessions()
-    
+
     if not sessions:
         typer.secho("No sessions to remove.", fg="yellow")
         return
@@ -324,13 +324,13 @@ def remove_all_sessions():
     # Separate regular sessions from workspaces for display
     regular_sessions = {k: v for k, v in sessions.items() if v.get("session_type") != "workspace"}
     workspace_sessions = {k: v for k, v in sessions.items() if v.get("session_type") == "workspace"}
-    
+
     typer.echo(f"This will remove {len(regular_sessions)} sessions and {len(workspace_sessions)} workspaces:")
     for label in regular_sessions:
         typer.echo(f"  Session: {label}")
     for label in workspace_sessions:
         typer.echo(f"  Workspace: {label}")
-        
+
     typer.confirm(f"Remove all {len(sessions)} items?", abort=True)
 
     # Remove all sessions (including workspaces)
@@ -394,7 +394,7 @@ def list_sessions():
         )
 
         session_type = data.get("session_type", "session")
-        
+
         if session_type == "workspace":
             # Display workspace info
             workspace_repos = data.get("workspace_repos", [])
@@ -403,7 +403,7 @@ def list_sessions():
         else:
             # Display regular session info
             repo_display = f"{data['repository_name']} ({Path(data['repository_path']).parent.name})"
-        
+
         table.add_row(
             label,
             session_type.title(),
@@ -462,7 +462,7 @@ def checkout_session(target: str, custom_label: Optional[str] = None, repo_path:
     # Resolve repository path
     repo_root = utils.resolve_repository_path(repo_path)
     repo_name = repo_root.name
-    
+
     worktree_path = utils.get_worktree_path(repo_root, label)
     session_name = utils.get_tmux_session_name(repo_root, label)
 
@@ -516,61 +516,29 @@ def checkout_session(target: str, custom_label: Optional[str] = None, repo_path:
 
 
 def open_control_center():
-    """Open all sessions (including workspaces) in a tiled tmux layout."""
+    """Create a new 'control-center' tmux session with separate windows for each par session."""
+
+    # Get all sessions from global state (includes both regular sessions and workspaces)
     sessions = _get_all_sessions()
 
     if not sessions:
-        typer.secho("No sessions to display.", fg="yellow")
+        typer.secho("No sessions or workspaces to display.", fg="yellow")
         return
-
-    # Prepare all contexts for control center
-    active_contexts = []
-
-    # Add all sessions (including workspaces)
-    for label, data in sessions.items():
-        session_name = data["tmux_session_name"]
-        session_type = data.get("session_type", "session")
-        
-        if not operations.tmux_session_exists(session_name):
-            typer.secho(f"Recreating {session_type} '{label}'...", fg="yellow")
-            
-            if session_type == "workspace":
-                # For workspaces, recreate from workspace root
-                workspace_root = Path(data["repository_path"])
-                operations.create_tmux_session(session_name, workspace_root)
-            else:
-                # For regular sessions, recreate from worktree path
-                operations.create_tmux_session(session_name, Path(data["worktree_path"]))
-        
-        active_contexts.append({
-            "tmux_session_name": session_name,
-            "worktree_path": data["worktree_path"]
-        })
-
-    operations.open_control_center(active_contexts)
-
-def open_control_center_new():
-    """Create a new 'control-center' tmux session with separate windows for each par session."""
-
-    # Get all repository sessions across all repos
-    all_repo_sessions = _load_state()
-
-    # Get all workspace sessions across all directories
-    all_workspace_sessions = workspace._load_workspace_state()
 
     # Collect all repositories to determine naming strategy
     all_repos = set()
 
-    # Collect repo names from single-repo sessions
-    for repo_path, repo_sessions in all_repo_sessions.items():
-        repo_name = Path(repo_path).name
-        all_repos.add(repo_name)
-
-    # Collect repo names from workspace sessions
-    for workspace_dir, workspaces in all_workspace_sessions.items():
-        for ws_label, ws_data in workspaces.items():
-            for repo_data in ws_data.get("repos", []):
+    # Collect repo names from all sessions
+    for label, data in sessions.items():
+        session_type = data.get("session_type", "session")
+        if session_type == "workspace":
+            # For workspaces, collect all repo names
+            workspace_repos = data.get("workspace_repos", [])
+            for repo_data in workspace_repos:
                 all_repos.add(repo_data['repo_name'])
+        else:
+            # For regular sessions, use repository name
+            all_repos.add(data['repository_name'])
 
     # Determine if we need to include repo names (more than one unique repo)
     include_repo_name = len(all_repos) > 1
@@ -578,10 +546,24 @@ def open_control_center_new():
     # Prepare all contexts for control center
     active_contexts = []
 
-    # Add all single-repo sessions
-    for repo_path, repo_sessions in all_repo_sessions.items():
-        repo_name = Path(repo_path).name
-        for label, data in repo_sessions.items():
+    # Process all sessions
+    for label, data in sessions.items():
+        session_type = data.get("session_type", "session")
+
+        if session_type == "workspace":
+            # For workspaces, create separate windows for each repo
+            workspace_repos = data.get("workspace_repos", [])
+            for repo_data in workspace_repos:
+                repo_name = repo_data['repo_name']
+                name = f"{label}-{repo_name}" if include_repo_name else f"{label}-{repo_name}"
+                active_contexts.append({
+                    "name": name,
+                    "path": repo_data["worktree_path"],
+                    "type": "workspace"
+                })
+        else:
+            # For regular sessions, create single window
+            repo_name = data['repository_name']
             name = f"{repo_name}-{label}" if include_repo_name else label
             active_contexts.append({
                 "name": name,
@@ -589,19 +571,4 @@ def open_control_center_new():
                 "type": "session"
             })
 
-    # Add all workspace sessions - create separate windows for each repo in each workspace
-    for workspace_dir, workspaces in all_workspace_sessions.items():
-        for ws_label, ws_data in workspaces.items():
-            for repo_data in ws_data.get("repos", []):
-                name = f"{ws_label}-{repo_data['repo_name']}" if include_repo_name else ws_label
-                active_contexts.append({
-                    "name": name,
-                    "path": repo_data["worktree_path"],
-                    "type": "workspace"
-                })
-
-    if not active_contexts:
-        typer.secho("No sessions or workspaces to display.", fg="yellow")
-        return
-
-    operations.open_control_center_new(active_contexts)
+    operations.open_control_center(active_contexts)

@@ -28,7 +28,7 @@ def create_worktree(label: str, worktree_path: Path, repo_root: Optional[Path] =
     """Create a new git worktree and branch."""
     if repo_root is None:
         repo_root = get_git_repo_root()
-    
+
     cmd = ["git", "worktree", "add", "-b", label, str(worktree_path)]
     if base_branch:
         cmd.append(base_branch)
@@ -45,7 +45,7 @@ def remove_worktree(worktree_path: Path, repo_root: Optional[Path] = None):
     """Remove a git worktree."""
     if repo_root is None:
         repo_root = get_git_repo_root()
-    
+
     cmd = ["git", "worktree", "remove", "--force", str(worktree_path)]
 
     try:
@@ -63,6 +63,7 @@ def checkout_worktree(
     if repo_root is None:
         repo_root = get_git_repo_root()
 
+    pr_number = ""
     # Handle PR fetching specially
     if strategy.is_pr:
         try:
@@ -117,7 +118,7 @@ def delete_branch(branch_name: str, repo_root: Optional[Path] = None):
     """Delete a git branch."""
     if repo_root is None:
         repo_root = get_git_repo_root()
-    
+
     cmd = ["git", "branch", "-D", branch_name]
 
     try:
@@ -197,68 +198,7 @@ def open_tmux_session(session_name: str):
             raise typer.Exit(1)
 
 
-def open_control_center(sessions_data: List[dict]):
-    """Open all sessions in a control center with tiled panes."""
-    _check_tmux()
-
-    if os.getenv("TMUX"):
-        typer.secho(
-            "Error: Control center must be run outside tmux.", fg="red", err=True
-        )
-        raise typer.Exit(1)
-
-    if not sessions_data:
-        typer.secho("No sessions to display.", fg="yellow")
-        return
-
-    # Use a global control center session name
-    cc_session_name = "par-control-center"
-
-    # Check if control center already exists
-    if tmux_session_exists(cc_session_name):
-        typer.secho(
-            f"Attaching to existing control center '{cc_session_name}'", fg="cyan"
-        )
-        open_tmux_session(cc_session_name)
-        return
-
-    # Create new control center session
-    first_session = sessions_data[0]
-    create_tmux_session(cc_session_name, Path(first_session["worktree_path"]))
-
-    # Set up first pane
-    attach_cmd = f"TMUX= tmux attach-session -t {first_session['tmux_session_name']}"
-    send_tmux_keys(cc_session_name, attach_cmd)
-
-    # Add other sessions in split panes
-    for session_data in sessions_data[1:]:
-        attach_cmd = f"TMUX= tmux attach-session -t {session_data['tmux_session_name']}"
-
-        # Split horizontally and set working directory
-        run_cmd(
-            [
-                "tmux",
-                "split-window",
-                "-h",
-                "-t",
-                cc_session_name,
-                "-c",
-                str(session_data["worktree_path"]),
-            ]
-        )
-        send_tmux_keys(cc_session_name, attach_cmd)
-
-        # Re-tile after each split
-        run_cmd(["tmux", "select-layout", "-t", cc_session_name, "tiled"])
-
-    # Final layout and attach
-    run_cmd(["tmux", "select-layout", "-t", cc_session_name, "tiled"])
-
-    typer.secho(f"Created control center with {len(sessions_data)} panes.", fg="green")
-    open_tmux_session(cc_session_name)
-
-
-def open_control_center_new(contexts_data: List[dict]):
+def open_control_center(contexts_data: List[dict]):
     """Create a new 'control-center' tmux session with separate windows for each context."""
     _check_tmux()
 
