@@ -1,7 +1,6 @@
 """Workspace management for multi-repository development."""
 
 import datetime
-import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -9,31 +8,22 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import initialization, operations, utils
+from . import core, initialization, operations, utils
 
 
 # Simplified workspace management - now workspaces are just special sessions
 def _validate_workspace_label_unique(label: str) -> bool:
     """Check if a workspace label is globally unique across all sessions."""
-    from . import core
     return core._validate_label_unique(label)
 
 
 def _add_workspace_session(workspace_data: Dict[str, Any]):
     """Add a workspace as a special type of session to global state."""
-    from . import core
     # Mark as workspace type and add to sessions (not separate workspace state)
     workspace_data["session_type"] = "workspace"
     core._add_session(workspace_data)
 
 
-def _get_workspace_session(label: str) -> Optional[Dict[str, Any]]:
-    """Get a workspace session by label."""
-    from . import core
-    session = core._get_session(label)
-    if session and session.get("session_type") == "workspace":
-        return session
-    return None
 
 
 # Workspace operations
@@ -45,7 +35,7 @@ def start_workspace_session(
     if not _validate_workspace_label_unique(label):
         typer.secho(f"Error: Label '{label}' already exists. Labels must be globally unique.", fg="red", err=True)
         raise typer.Exit(1)
-    
+
     # Resolve workspace directory
     if workspace_path:
         workspace_root = Path(workspace_path).resolve()
@@ -81,7 +71,7 @@ def start_workspace_session(
                 # Relative name provided (traditional behavior)
                 repo_name = repo_spec
                 repo_path = workspace_root / repo_name
-            
+
             if not repo_path.exists():
                 typer.secho(
                     f"Error: Repository path '{repo_path}' does not exist.", fg="red", err=True
@@ -92,7 +82,7 @@ def start_workspace_session(
                     f"Error: '{repo_path}' is not a git repository.", fg="red", err=True
                 )
                 raise typer.Exit(1)
-            
+
             repo_names.append(repo_name)
             repo_paths.append(repo_path)
 
@@ -139,8 +129,8 @@ def start_workspace_session(
     # Calculate workspace root directory
     first_worktree_path = Path(repos_data[0]["worktree_path"])
     workspace_root = first_worktree_path.parent.parent
-    
-    # Create simple tmux session starting from workspace root  
+
+    # Create simple tmux session starting from workspace root
     operations.create_tmux_session(session_name, workspace_root)
 
     # Run initialization for each repository if .par.yaml exists
@@ -185,7 +175,6 @@ def start_workspace_session(
 
 def list_workspace_sessions():
     """List all workspace sessions globally (now shown in main par ls)."""
-    from . import core
     all_sessions = core._get_all_sessions()
     workspace_sessions = {k: v for k, v in all_sessions.items() if v.get("session_type") == "workspace"}
 
@@ -222,20 +211,20 @@ def list_workspace_sessions():
 def open_workspace_session(label: str):
     """Open/attach to a workspace session (now handled by core.open_session)."""
     # Delegate to core.open_session since workspaces are now regular sessions
-    from . import core
     core.open_session(label)
 
 
 def remove_workspace_session(label: str):
     """Remove a workspace session (now handled by core.remove_session)."""
     # Delegate to core.remove_session since workspaces are now regular sessions
-    from . import core
     core.remove_session(label)
 
 
 def remove_all_workspace_sessions():
     """Remove all workspace sessions globally."""
-    workspace_sessions = _get_all_workspaces()
+    # Get all workspace sessions from global sessions
+    all_sessions = core._get_all_sessions()
+    workspace_sessions = {k: v for k, v in all_sessions.items() if v.get("session_type") == "workspace"}
 
     if not workspace_sessions:
         typer.secho("No workspace sessions to remove.", fg="yellow")
@@ -245,7 +234,7 @@ def remove_all_workspace_sessions():
     labels = list(workspace_sessions.keys())
     typer.echo(f"This will remove {len(labels)} workspace sessions:")
     for label in labels:
-        workspace_root = Path(workspace_sessions[label]["workspace_root"]).name
+        workspace_root = Path(workspace_sessions[label]["repository_path"]).name
         typer.echo(f"  - {label} ({workspace_root})")
 
     if not typer.confirm("Are you sure?"):
@@ -265,13 +254,14 @@ def remove_all_workspace_sessions():
 
 def open_workspace_in_ide(label: str, ide: str):
     """Open a workspace in the specified IDE."""
-    workspace_data = _get_workspace(label)
-    
-    if not workspace_data:
+    # Get workspace session from global sessions
+    session_data = core._get_session(label)
+
+    if not session_data or session_data.get("session_type") != "workspace":
         typer.secho(f"Error: Workspace '{label}' not found.", fg="red", err=True)
         raise typer.Exit(1)
 
-    repos_data = workspace_data["repos"]
+    repos_data = session_data["workspace_repos"]
 
     # Generate and save workspace file
     workspace_file = utils.save_vscode_workspace_file(label, repos_data)
