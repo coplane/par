@@ -1,6 +1,6 @@
 [project]
 name = "par-cli"
-version = "0.1.2"
+version = "0.2.0"
 description = "CLI for parallel development workflows with isolated Git worktrees and tmux sessions, tailored for agentic coding."
 authors = [ { name="Victor", email="vimota@gmail.com" } ]
 requires-python = ">=3.12"
