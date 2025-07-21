@@ -14,28 +14,11 @@ app = typer.Typer(
 
 
 def get_session_labels() -> List[str]:
-    """Get list of session and workspace labels for autocomplete."""
+    """Get list of all session and workspace labels for autocomplete."""
     try:
-        labels = []
-
-        # Add single-repo sessions
-        sessions = core._get_repo_sessions()
-        labels.extend(sessions.keys())
-
-        # Add workspaces that contain current repo
-        current_repo_root = core.utils.get_git_repo_root()
-        current_repo_name = current_repo_root.name
-        current_dir = current_repo_root.parent
-        workspace_sessions = workspace._get_workspace_sessions(current_dir)
-
-        for ws_label, ws_data in workspace_sessions.items():
-            # Check if this workspace contains the current repository
-            for repo_data in ws_data.get("repos", []):
-                if repo_data["repo_name"] == current_repo_name:
-                    labels.append(ws_label)
-                    break
-
-        return labels
+        # All sessions now include workspaces (with session_type="workspace")
+        sessions = core._get_all_sessions()
+        return list(sessions.keys())
     except Exception:
         return []
 
@@ -74,9 +57,16 @@ def start(
     label: Annotated[
         str,
         typer.Argument(
-            help="A unique label for the new worktree, branch, and tmux session."
+            help="A globally unique label for the new worktree, branch, and tmux session."
         ),
     ],
+    path: Annotated[
+        Optional[str],
+        typer.Option(
+            "--path", "-p",
+            help="Path to git repository (defaults to current directory)"
+        ),
+    ] = None,
     open_session: Annotated[
         bool,
         typer.Option(
@@ -87,12 +77,13 @@ def start(
     """
     Start a new git worktree and tmux session.
     Creates a worktree, a git branch (both named <label>), and a tmux session.
+    Labels must be globally unique across all repositories.
     """
-    core.start_session(label, open_session=open_session)
+    core.start_session(label, repo_path=path, open_session=open_session)
 
 
 def get_session_labels_with_all() -> List[str]:
-    """Get list of session and workspace labels plus 'all' for autocomplete."""
+    """Get list of all session and workspace labels plus 'all' for autocomplete."""
     try:
         labels = get_session_labels()  # Reuse the unified function
         labels.append("all")
@@ -158,20 +149,28 @@ def checkout(
             help="Branch name, PR number (pr/123), PR URL, or remote branch (user:branch)"
         ),
     ],
+    path: Annotated[
+        Optional[str],
+        typer.Option(
+            "--path", "-p",
+            help="Path to git repository (defaults to current directory)"
+        ),
+    ] = None,
     label: Annotated[
         Optional[str],
         typer.Option(
             "--label",
             "-l",
-            help="Custom label for the session (defaults to branch name)",
+            help="Custom globally unique label for the session (defaults to branch name)",
         ),
     ] = None,
 ):
     """
     Checkout an existing branch or PR into a new par session.
     Creates a worktree from existing branch/PR without creating a new branch.
+    Labels must be globally unique across all repositories.
     """
-    core.checkout_session(target, label)
+    core.checkout_session(target, custom_label=label, repo_path=path)
 
 
 @app.command()
@@ -209,8 +208,15 @@ app.add_typer(workspace_app, name="workspace")
 def workspace_start(
     label: Annotated[
         str,
-        typer.Argument(help="A unique label for the workspace"),
+        typer.Argument(help="A globally unique label for the workspace"),
     ],
+    path: Annotated[
+        Optional[str],
+        typer.Option(
+            "--path", "-p",
+            help="Path to workspace directory (defaults to current directory)"
+        ),
+    ] = None,
     repos: Annotated[
         Optional[str],
         typer.Option(
@@ -227,13 +233,14 @@ def workspace_start(
     """
     Start a new multi-repository workspace.
     Creates worktrees and branches for multiple repos in a single tmux session.
+    Labels must be globally unique across all repositories and workspaces.
     """
     # Parse comma-separated repos
     repo_list = None
     if repos:
         repo_list = [r.strip() for r in repos.split(",") if r.strip()]
 
-    workspace.start_workspace_session(label, repo_list, open_session)
+    workspace.start_workspace_session(label, workspace_path=path, repos=repo_list, open_session=open_session)
 
 
 @workspace_app.command("ls")

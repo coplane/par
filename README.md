@@ -2,7 +2,7 @@
 
 > **Easily manage parallel development workflows with isolated Git worktrees and tmux sessions**
 
-`par` is a command-line tool designed to simplify parallel development within a single Git repository. It's specifically designed for working with AI coding assistants, background agents, or multiple development contexts simultaneously, `par` creates isolated workspaces that don't interfere with each other.
+`par` is a **global** command-line tool designed to simplify parallel development across any Git repositories on your system. It's specifically designed for working with AI coding assistants, background agents, or multiple development contexts simultaneously, `par` creates isolated workspaces that don't interfere with each other.
 
 ## Why Par?
 
@@ -12,8 +12,9 @@ Tools like OpenAI Codex, Claude Code, and other coding agents have made it easie
 
 - **🔀 Git Worktrees**: Each session gets its own directory and branch
 - **🖥️ Tmux Sessions**: Persistent terminal sessions where agents can run in the background
-- **🏷️ Simple Labels**: Easy-to-remember names for each session
-- **📡 Remote Control**: Send commands to any or all sessions
+- **🏷️ Globally Unique Labels**: Easy-to-remember names that work across all repositories
+- **🌍 Global Management**: Create, list, and manage sessions from anywhere on your system
+- **📡 Remote Control**: Send commands to any or all sessions globally
 - **👁️ Overview Mode**: Monitor all sessions simultaneously
 - **🏢 Multi-Repo Workspaces**: Unified development across multiple repositories
 - **🎨 IDE Integration**: Native VSCode/Cursor workspace support with auto-generated configs
@@ -26,27 +27,30 @@ https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
 
 ### 🚀 **Quick Start**
 ```bash
+# From within a git repository
 par start feature-auth    # Creates worktree, branch, and tmux session
-par start bugfix-login    # Another isolated session
-par start experiment-ai   # Yet another session
+
+# From anywhere on your system
+par start bugfix-login --path /path/to/repo
+par start experiment-ai --path ~/projects/my-app
 ```
 
-### 📋 **Unified Development Context Management**
+### 📋 **Global Development Context Management**
 ```bash
-par ls                    # List all sessions AND workspaces in one view
-par open feature-auth     # Switch to any session or workspace
-par rm bugfix-login       # Clean up completed work
+par ls                    # List ALL sessions and workspaces globally
+par open feature-auth     # Switch to any session or workspace from anywhere
+par rm bugfix-login       # Clean up completed work globally
 ```
 
-### 📡 **Remote Execution**  
+### 📡 **Global Remote Execution**  
 ```bash
 par send feature-auth "pnpm test"           # Run tests in one session
-par send all "git status"                  # Check status across all sessions
+par send all "git status"                  # Check status across ALL sessions globally
 ```
 
-### 🎛️ **Control Center**
+### 🎛️ **Global Control Center**
 ```bash
-par control-center        # View all sessions AND workspaces in a tiled layout
+par control-center        # View ALL sessions and workspaces globally in a tiled layout
 ```
 
 ### 🏢 **Multi-Repository Workspaces**
@@ -112,14 +116,19 @@ par --help
 Create a new isolated development environment:
 
 ```bash
-cd /path/to/your/git/repo
+# From within a git repository
 par start my-feature
+
+# From anywhere, specifying the repository path
+par start my-feature --path /path/to/your/git/repo
+par start my-feature -p ~/projects/my-app
 ```
 
 This creates:
 - Git worktree at `~/.local/share/par/worktrees/<repo-hash>/my-feature/`
 - Git branch named `my-feature`
 - tmux session named `par-<repo>-<hash>-my-feature`
+- **Globally unique session** accessible from anywhere
 
 ### Checking Out Existing Branches and PRs
 
@@ -140,6 +149,10 @@ par checkout alice:feature-branch
 
 # Checkout with custom session label
 par checkout develop --label dev-work
+
+# Checkout from anywhere specifying repository path
+par checkout feature-branch --path /path/to/repo
+par checkout pr/123 --path ~/projects/my-app --label pr-review
 ```
 
 **Supported formats:**
@@ -149,66 +162,67 @@ par checkout develop --label dev-work
 - `username:branch` - Remote branch from fork
 - `remote/branch` - Branch from specific remote
 
-### Managing Development Contexts
+### Global Development Context Management
 
-**List all sessions and workspaces:**
+**List all sessions and workspaces globally:**
 ```bash
-par ls
+par ls    # Shows ALL sessions and workspaces from anywhere
 ```
 
-Shows both single-repo sessions and multi-repo workspaces in a unified table:
+Shows all development contexts across all repositories in a unified table:
 
 ```
-Par Development Contexts for coplane:
+Par Development Contexts (Global)
 
 ┌────────────────┬───────────┬──────────────────┬──────────────┬─────────────────┬────────────┐
-│ Label          │ Type      │ Tmux Session     │ Branch       │ Other Repos     │ Created    │
+│ Label          │ Type      │ Repository/Work… │ Tmux Session │ Branch          │ Created    │
 ├────────────────┼───────────┼──────────────────┼──────────────┼─────────────────┼────────────┤
-│ feature-auth   │ Session   │ par-coplane-...  │ feature-auth │ -               │ 2025-06-07 │
-│ fullstack-auth │ Workspace │ par-ws-coplane.. │ fullstack-auth│ planar          │ 2025-06-05 │
+│ feature-auth   │ Session   │ my-app (proj…)   │ par-myapp-…  │ feature-auth    │ 2025-07-19 │
+│ fullstack      │ Workspace │ workspace (2 re… │ par-ws-full… │ fullstack       │ 2025-07-19 │
+│ bugfix-123     │ Checkout  │ other-repo (c…)  │ par-other-…  │ hotfix/bug-123  │ 2025-07-19 │
 └────────────────┴───────────┴──────────────────┴──────────────┴─────────────────┴────────────┘
 ```
 
-**Open any development context:**
+**Open any development context from anywhere:**
 ```bash
-par open my-feature        # Opens single-repo session
-par open fullstack-auth    # Opens multi-repo workspace
+par open my-feature        # Opens session (works globally)
+par open fullstack-auth    # Opens workspace (works globally)
 ```
 
-**Remove completed work:**
+**Remove completed work from anywhere:**
 ```bash
-par rm my-feature      # Remove specific session/workspace
-par rm all             # Remove all sessions (with confirmation)
+par rm my-feature      # Remove specific session/workspace globally
+par rm all             # Remove ALL sessions and workspaces (with confirmation)
 ```
 
 > **Note**: When removing checkout sessions, `par` only removes the worktree and tmux session. It does not delete the original branch since it wasn't created by `par`.
 
-### Remote Command Execution
+### Global Remote Command Execution
 
-**Send commands to specific sessions:**
+**Send commands to specific sessions (works globally):**
 ```bash
 par send my-feature "npm install"
 par send backend-work "python manage.py migrate"
-par send docs-update "mkdocs serve"
+par send workspace-name "git status"    # Works for workspaces too
 ```
 
-**Broadcast to all sessions:**
+**Broadcast to ALL sessions and workspaces globally:**
 ```bash
-par send all "git status"
-par send all "npm test"
+par send all "git status"    # Sends to every session everywhere
+par send all "npm test"      # Runs tests across all contexts
 ```
 
-### Control Center
+### Global Control Center
 
-View all development contexts simultaneously in a tiled tmux layout:
+View ALL development contexts simultaneously in a tiled tmux layout:
 
 ```bash
-par control-center
+par control-center    # Works from anywhere, shows everything
 ```
 
-Shows both single-repo sessions and multi-repo workspaces in separate panes, giving you a unified overview of all your active development work.
+Shows all sessions and workspaces across all repositories in separate panes, giving you a unified overview of your entire development workflow.
 
-> **Note**: Must be run from outside tmux. Creates a new session and attaches to each context in its own pane.
+> **Note**: Must be run from outside tmux. Creates a global control center session with all contexts visible.
 
 ### Automatic Initialization with .par.yaml
 
@@ -242,7 +256,7 @@ When you run `par start my-feature`, these commands will automatically execute i
 
 ## Multi-Repository Workspaces
 
-For projects spanning multiple repositories (like frontend/backend splits or microservices), `par` provides **workspace** functionality that manages multiple repositories together in a unified development environment.
+For projects spanning multiple repositories (like frontend/backend splits or microservices), `par` provides **workspace** functionality that creates a single session managing multiple repositories together in a unified development environment.
 
 ### Why Workspaces?
 
@@ -252,19 +266,18 @@ When working on features that span multiple repositories, you typically need to:
 - Switch between repositories frequently
 - Manage development servers for multiple services
 
-Workspaces solve this by creating a single tmux session with dedicated panes for each repository, all sharing the same branch name.
+Workspaces solve this by creating a **single global session** that starts from a unified workspace directory with access to all repositories, all sharing the same branch name.
 
 ### Quick Start
 
 ```bash
-# Navigate to directory containing multiple repos
+# From a directory containing multiple repos (auto-detection)
 cd /path/to/my-project     # contains frontend/, backend/, docs/
-
-# Start workspace with auto-detection
 par workspace start feature-auth
 
-# Or specify repositories explicitly
-par workspace start feature-auth --repos frontend,backend
+# From anywhere, specifying repositories by absolute path
+par workspace start feature-auth --repos /path/to/frontend,/path/to/backend
+par workspace start feature-auth --path /workspace/root --repos frontend,backend
 
 # Open in your preferred IDE with proper multi-repo support
 par workspace code feature-auth     # VSCode
@@ -275,47 +288,58 @@ par workspace cursor feature-auth   # Cursor
 
 **Create a workspace:**
 ```bash
-par workspace start <label> [--repos repo1,repo2] [--open]
+par workspace start <label> [--path /workspace/root] [--repos repo1,repo2] [--open]
 ```
 
-**List workspaces:**
+**List workspaces (now unified with sessions):**
 ```bash
-par workspace ls
+par ls                            # Shows workspaces alongside sessions
+par workspace ls                  # Shows only workspaces (deprecated)
 ```
 
-**Open workspace:**
+**Open workspace (now unified):**
 ```bash
-par workspace open <label>        # Attach to tmux session
+par open <label>                  # Opens workspace session (works globally)
 par workspace code <label>        # Open in VSCode  
 par workspace cursor <label>      # Open in Cursor
 ```
 
-**Remove workspace:**
+**Remove workspace (now unified):**
 ```bash
-par workspace rm <label>          # Remove specific workspace
-par workspace rm all              # Remove all workspaces
+par rm <label>                    # Remove workspace (works globally)
+par workspace rm <label>          # Also works (delegates to global rm)
 ```
 
 ### How Workspaces Work
 
 When you create a workspace, `par` automatically:
 
-1. **Detects repositories** in the current directory (or uses `--repos`)
+1. **Detects repositories** in the workspace directory (or uses `--repos` with absolute paths)
 2. **Creates worktrees** for each repository with the same branch name
-3. **Creates tmux session** in the workspace root directory with access to all repositories
+3. **Creates single global session** starting from unified workspace root with access to all repositories
 4. **Generates IDE workspace files** for seamless editor integration
+5. **Integrates with global par commands** - use `par ls`, `par open`, `par rm` etc.
 
 **Example directory structure:**
 ```
-my-fullstack-app/
-├── frontend/           # React app
-├── backend/            # Python API  
-└── docs/              # Documentation
+# Original repositories anywhere on system:
+/home/user/projects/frontend/     # React app
+/home/user/projects/backend/      # Python API  
+/opt/company/docs/                # Documentation
 
-# After: par workspace start user-auth
-# Creates branches: user-auth in all three repos
-# Creates single tmux session in workspace root
-# Can access all repositories with: cd frontend/, cd backend/, cd docs/
+# After: par workspace start user-auth --repos /home/user/projects/frontend,/home/user/projects/backend,/opt/company/docs
+# Creates unified workspace at: ~/.local/share/par/workspaces/.../user-auth/
+├── frontend/
+│   └── user-auth/     # Worktree with user-auth branch
+├── backend/
+│   └── user-auth/     # Worktree with user-auth branch  
+├── docs/
+│   └── user-auth/     # Worktree with user-auth branch
+└── user-auth.code-workspace
+
+# Single tmux session starts from workspace root
+# Navigate with: cd frontend/, cd backend/, cd docs/
+# Global session accessible via: par open user-auth (from anywhere)
 ```
 
 ### IDE Integration
@@ -421,34 +445,38 @@ Each repository's initialization runs in its own worktree, ensuring proper isola
 
 **Full-stack feature development:**
 ```bash
-# 1. Start workspace for new feature
-cd my-app/
-par workspace start user-profiles --repos frontend,backend
+# 1. Start workspace for new feature (from anywhere)
+par workspace start user-profiles --repos /path/to/frontend,/path/to/backend
 
 # 2. Open in IDE with proper multi-repo support
 par workspace code user-profiles
 
-# 3. Open tmux session in workspace root
-par workspace open user-profiles
+# 3. Open unified session (works globally)
+par open user-profiles
 
 # 4. Work across repositories from single terminal
 cd frontend/    # Switch to frontend worktree
 cd ../backend/  # Switch to backend worktree
 claude          # Run Claude from workspace root to see all repos
 
-# 5. Clean up when feature is complete
-par workspace rm user-profiles
+# 5. Global management (works from anywhere)
+par ls                           # See all sessions including workspaces
+par send user-profiles "git status"  # Send commands globally
+
+# 6. Clean up when feature is complete (from anywhere)
+par rm user-profiles
 ```
 
 **Microservices development:**
 ```bash
-# Work on API changes affecting multiple services
-par workspace start api-v2 --repos auth-service,user-service,gateway
+# Work on API changes affecting multiple services (absolute paths)
+par workspace start api-v2 --repos /srv/auth-service,/srv/user-service,/srv/gateway
 
 # All services get api-v2 branch
-# Single tmux session in workspace root
-# IDE workspace shows all services together
-# Navigate between services: cd auth-service/, cd user-service/, etc.
+# Single global session accessible from anywhere
+# IDE workspace shows all services together  
+# Navigate: cd auth-service/, cd user-service/, etc.
+# Global commands: par send api-v2 "docker-compose up"
 ```
 
 ### Branch Creation
@@ -461,16 +489,19 @@ Workspaces create branches from the **currently checked out branch** in each rep
 
 ## Advanced Usage
 
-### Repository-Scoped Sessions
+### Globally Unique Sessions
 
-`par` automatically scopes sessions to the current Git repository. You can use the same labels across different projects without conflicts:
+`par` enforces globally unique session labels across all repositories. This ensures you can manage sessions from anywhere without conflicts:
 
 ```bash
-cd ~/project-a
-par start feature-auth    # Creates project-a/feature-auth
+# All sessions must have unique labels globally
+par start feature-auth --path ~/project-a    # Creates feature-auth session
+par start feature-auth --path ~/project-b    # ❌ Error: label already exists
+par start feature-auth-v2 --path ~/project-b # ✅ Works with unique label
 
-cd ~/project-b  
-par start feature-auth    # Creates separate project-b/feature-auth
+# Access any session from anywhere
+par open feature-auth      # Works from any directory
+par ls                     # Shows all sessions globally
 ```
 
 ## Configuration
@@ -480,12 +511,20 @@ Par stores its data in `~/.local/share/par/` (or `$XDG_DATA_HOME/par/`):
 
 ```
 ~/.local/share/par/
-├── state.json              # Session metadata
-└── worktrees/              # Git worktrees organized by repo
-    └── <repo-hash>/
-        ├── feature-1/      # Individual workspaces
-        ├── feature-2/
-        └── experiment-1/
+├── global_state.json       # Global session and workspace metadata
+├── worktrees/              # Single-repo sessions organized by repo hash
+│   └── <repo-hash>/
+│       ├── feature-1/      # Individual worktrees
+│       ├── feature-2/
+│       └── experiment-1/
+└── workspaces/             # Multi-repo workspaces
+    └── <workspace-hash>/
+        └── <workspace-label>/
+            ├── frontend/
+            │   └── feature-auth/     # Worktree
+            ├── backend/
+            │   └── feature-auth/     # Worktree  
+            └── feature-auth.code-workspace
 ```
 
 ### Session Naming Convention
@@ -495,9 +534,9 @@ Example: `par-myproject-a1b2c3d4-feature-auth`
 
 ### Cleaning Up
 
-Remove all par-managed resources for the current repository:
+Remove all par-managed resources globally:
 ```bash
-par rm all
+par rm all    # Removes ALL sessions and workspaces everywhere
 ```
 
 Remove specific stale sessions:

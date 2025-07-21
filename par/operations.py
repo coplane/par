@@ -24,9 +24,11 @@ def _check_tmux():
 
 
 # Git operations
-def create_worktree(label: str, worktree_path: Path, base_branch: Optional[str] = None):
+def create_worktree(label: str, worktree_path: Path, repo_root: Optional[Path] = None, base_branch: Optional[str] = None):
     """Create a new git worktree and branch."""
-    repo_root = get_git_repo_root()
+    if repo_root is None:
+        repo_root = get_git_repo_root()
+    
     cmd = ["git", "worktree", "add", "-b", label, str(worktree_path)]
     if base_branch:
         cmd.append(base_branch)
@@ -39,9 +41,11 @@ def create_worktree(label: str, worktree_path: Path, base_branch: Optional[str] 
         raise typer.Exit(1)
 
 
-def remove_worktree(worktree_path: Path):
+def remove_worktree(worktree_path: Path, repo_root: Optional[Path] = None):
     """Remove a git worktree."""
-    repo_root = get_git_repo_root()
+    if repo_root is None:
+        repo_root = get_git_repo_root()
+    
     cmd = ["git", "worktree", "remove", "--force", str(worktree_path)]
 
     try:
@@ -53,10 +57,11 @@ def remove_worktree(worktree_path: Path):
 
 
 def checkout_worktree(
-    branch_name: str, worktree_path: Path, strategy: CheckoutStrategy
+    branch_name: str, worktree_path: Path, strategy: CheckoutStrategy, repo_root: Optional[Path] = None
 ):
     """Create worktree from existing branch."""
-    repo_root = get_git_repo_root()
+    if repo_root is None:
+        repo_root = get_git_repo_root()
 
     # Handle PR fetching specially
     if strategy.is_pr:
@@ -108,9 +113,11 @@ def checkout_worktree(
         raise typer.Exit(1)
 
 
-def delete_branch(branch_name: str):
+def delete_branch(branch_name: str, repo_root: Optional[Path] = None):
     """Delete a git branch."""
-    repo_root = get_git_repo_root()
+    if repo_root is None:
+        repo_root = get_git_repo_root()
+    
     cmd = ["git", "branch", "-D", branch_name]
 
     try:
@@ -204,8 +211,8 @@ def open_control_center(sessions_data: List[dict]):
         typer.secho("No sessions to display.", fg="yellow")
         return
 
-    repo_root = get_git_repo_root()
-    cc_session_name = get_tmux_session_name(repo_root, "cc")
+    # Use a global control center session name
+    cc_session_name = "par-control-center"
 
     # Check if control center already exists
     if tmux_session_exists(cc_session_name):
