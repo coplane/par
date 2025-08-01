@@ -23,6 +23,21 @@ def _check_tmux():
         raise typer.Exit(1)
 
 
+def get_current_tmux_session() -> Optional[str]:
+    """Get the name of the current tmux session, if inside tmux."""
+    if not os.getenv("TMUX"):
+        return None
+    try:
+        result = run_cmd(
+            ["tmux", "display-message", "-p", "#S"], 
+            capture=True, 
+            suppress_output=True
+        )
+        return result.stdout.strip() if result.stdout else None
+    except subprocess.CalledProcessError:
+        return None
+
+
 # Git operations
 def create_worktree(label: str, worktree_path: Path, repo_root: Optional[Path] = None, base_branch: Optional[str] = None):
     """Create a new git worktree and branch."""

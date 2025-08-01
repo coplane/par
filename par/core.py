@@ -50,6 +50,23 @@ def _save_global_state(state: Dict[str, Any]):
         json.dump(state, f, indent=2)
 
 
+def _update_last_session(label: str):
+    """Update the last accessed session in global state."""
+    state = _load_global_state()
+    # Store the current last_session as previous_session before updating
+    current_last = state.get("last_session")
+    if current_last and current_last != label:
+        state["previous_session"] = current_last
+    state["last_session"] = label
+    _save_global_state(state)
+
+
+def _get_previous_session() -> Optional[str]:
+    """Get the label of the previous session (for 'par open -' functionality)."""
+    state = _load_global_state()
+    return state.get("previous_session")
+
+
 def _migrate_legacy_state() -> Dict[str, Any]:
     """Migrate from old per-repo state files to global state."""
     legacy_state_file = utils.get_data_dir() / "state.json"
@@ -231,6 +248,8 @@ def start_session(label: str, repo_path: Optional[str] = None, open_session: boo
     if open_session:
         typer.echo("Opening session...")
         operations.open_tmux_session(session_name)
+        # Track this session as the last opened
+        _update_last_session(label)
     else:
         typer.echo(f"To open: par open {label}")
 
@@ -418,6 +437,37 @@ def list_sessions():
 
 def open_session(label: str):
     """Open/attach to a specific session or workspace."""
+    # Handle special case for previous session
+    if label == "-":
+        previous_session = _get_previous_session()
+        if not previous_session:
+            typer.secho("Error: No previous session found.", fg="red", err=True)
+            raise typer.Exit(1)
+        
+        # Check if we're already in the previous session
+        current_tmux_session = operations.get_current_tmux_session()
+        if current_tmux_session:
+            # Find which of our tracked sessions corresponds to the current tmux session
+            state = _load_global_state()
+            current_par_session = None
+            for session_label, session_data in state["sessions"].items():
+                if session_data["tmux_session_name"] == current_tmux_session:
+                    current_par_session = session_label
+                    break
+            
+            # If we're already in the "previous" session, go to the last session instead
+            if current_par_session == previous_session:
+                last_session = state.get("last_session")
+                if last_session and last_session != current_par_session:
+                    label = last_session
+                else:
+                    typer.secho("Error: Cannot determine which session to switch to.", fg="red", err=True)
+                    raise typer.Exit(1)
+            else:
+                label = previous_session
+        else:
+            label = previous_session
+
     # Try sessions first
     session_data = _get_session(label)
     if session_data:
@@ -430,12 +480,16 @@ def open_session(label: str):
             )
 
         operations.open_tmux_session(session_name)
+        # Track this session as the last opened
+        _update_last_session(label)
         return
 
     # Try workspaces
     workspace_data = _get_workspace(label)
     if workspace_data:
         workspace.open_workspace_session(label)
+        # Track this workspace as the last opened
+        _update_last_session(label)
         return
 
     typer.secho(f"Error: Session or workspace '{label}' not found.", fg="red", err=True)
