@@ -178,7 +178,7 @@ def open(
     label: Annotated[
         str,
         typer.Argument(
-            help="The label of the session to open/attach to.",
+            help="The label of the session to open/attach to. Use '-' to open the last session.",
             autocompletion=get_session_labels,
         ),
     ],
@@ -186,6 +186,25 @@ def open(
     """
     Open/attach to a specific 'par'-managed tmux session.
     If inside tmux, switches client. If outside, attaches.
+    Use '-' to open the last session you had open.
+    Short alias: 'o'
+    """
+    core.open_session(label)
+
+
+@app.command(hidden=True)
+def o(
+    label: Annotated[
+        str,
+        typer.Argument(
+            help="The label of the session to open/attach to. Use '-' to open the last session.",
+            autocompletion=get_session_labels,
+        ),
+    ],
+):
+    """
+    Alias for 'open'. Open/attach to a specific 'par'-managed tmux session.
+    Use '-' to open the last session you had open.
     """
     core.open_session(label)
 
