@@ -67,6 +67,14 @@ def start(
             help="Path to git repository (defaults to current directory)"
         ),
     ] = None,
+    base_branch: Annotated[
+        Optional[str],
+        typer.Option(
+            "--base",
+            "-b",
+            help="Base branch/reference to branch from (defaults to current HEAD commit)",
+        ),
+    ] = None,
     open_session: Annotated[
         bool,
         typer.Option(
@@ -77,9 +85,15 @@ def start(
     """
     Start a new git worktree and tmux session.
     Creates a worktree, a git branch (both named <label>), and a tmux session.
+    The new branch starts from current HEAD unless --base is provided.
     Labels must be globally unique across all repositories.
     """
-    core.start_session(label, repo_path=path, open_session=open_session)
+    core.start_session(
+        label,
+        repo_path=path,
+        open_session=open_session,
+        base_branch=base_branch,
+    )
 
 
 def get_session_labels_with_all() -> List[str]:

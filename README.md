@@ -28,6 +28,7 @@ https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
 ```bash
 # From within a git repository
 par start feature-auth    # Creates worktree, branch, and tmux session
+par start feature-auth --base develop
 
 # From anywhere on your system
 par start bugfix-login --path /path/to/repo
@@ -116,7 +117,6 @@ uv tool install .
 uv tool upgrade par-cli
 ```
 
-
 ### Verify Installation
 
 ```bash
@@ -133,11 +133,17 @@ Create a new isolated development environment:
 ```bash
 # From within a git repository
 par start my-feature
+par start my-feature --base develop
 
 # From anywhere, specifying the repository path
 par start my-feature --path /path/to/your/git/repo
 par start my-feature -p ~/projects/my-app
 ```
+
+By default, `par start` branches from the current `HEAD` commit. Use `--base` to branch from a specific branch/reference. `par` resolves the base to a commit SHA, so uncommitted changes in your current worktree do not affect the new branch.
+
+If the label already matches an existing local branch, `par start <label>` will reuse that branch and create a worktree with it checked out instead of creating a new branch.
+If no local branch exists but `origin/<label>` exists, `par` fetches it and creates the worktree from `origin/<label>`.
 
 This creates:
 
@@ -247,6 +253,7 @@ Creates a unified `control-center` tmux session with separate windows for each d
 > **Note**: Must be run from outside tmux. Creates a global control center session with dedicated windows for each context.
 
 **Benefits of the windowed approach:**
+
 - **Easy Navigation**: Use tmux window switching (`Ctrl-b + number` or `Ctrl-b + n/p`) to jump between contexts
 - **Clean Organization**: Each development context gets its own dedicated window with a descriptive name
 - **Scalable**: Works well with many sessions/workspaces (unlike tiled panes that become cramped)

@@ -221,7 +221,12 @@ def _get_session(label: str) -> Optional[Dict[str, Any]]:
 
 
 # Session operations - now globally scoped
-def start_session(label: str, repo_path: Optional[str] = None, open_session: bool = False):
+def start_session(
+    label: str,
+    repo_path: Optional[str] = None,
+    open_session: bool = False,
+    base_branch: Optional[str] = None,
+):
     """Start a new git worktree and tmux session."""
     # Validate label is globally unique
     if not _validate_label_unique(label):
@@ -246,8 +251,35 @@ def start_session(label: str, repo_path: Optional[str] = None, open_session: boo
         typer.secho(f"Error: tmux session '{session_name}' exists.", fg="red", err=True)
         raise typer.Exit(1)
 
+    # If label already exists as a branch, reuse it instead of creating one.
+    label_branch_exists = operations.branch_exists(label, repo_root)
+    remote_label_branch_exists = False
+    if not label_branch_exists:
+        remote_label_branch_exists = operations.fetch_remote_branch(label, repo_root)
+
+    if (label_branch_exists or remote_label_branch_exists) and base_branch:
+        typer.secho(
+            f"Warning: --base '{base_branch}' ignored because branch '{label}' already exists.",
+            fg="yellow",
+        )
+
     # Create resources
-    operations.create_worktree(label, worktree_path, repo_root)
+    create_branch = not label_branch_exists
+    effective_base_branch = base_branch
+    if label_branch_exists:
+        create_branch = False
+        effective_base_branch = None
+    elif remote_label_branch_exists:
+        # Create local branch from fetched origin/<label>.
+        effective_base_branch = f"origin/{label}"
+
+    operations.create_worktree(
+        label,
+        worktree_path,
+        repo_root,
+        base_branch=effective_base_branch,
+        create_branch=create_branch,
+    )
     operations.create_tmux_session(session_name, worktree_path)
 
     # Run includes and initialization if .par.yaml exists
@@ -265,7 +297,8 @@ def start_session(label: str, repo_path: Optional[str] = None, open_session: boo
         "tmux_session_name": session_name,
         "branch_name": label,
         "created_at": datetime.datetime.utcnow().isoformat(),
-        "session_type": "session"
+        "session_type": "session",
+        "managed_branch": not (label_branch_exists or remote_label_branch_exists),
     }
     _add_session(session_data)
 
@@ -317,8 +350,10 @@ def _remove_regular_session(session_data: Dict[str, Any]):
     repo_root = Path(session_data["repository_path"])
     operations.remove_worktree(Path(session_data["worktree_path"]), repo_root)
 
-    # Only delete branch if it was created by par (not checkout)
-    if session_data.get("session_type") != "checkout":
+    # Delete only branches managed by par.
+    if session_data.get(
+        "managed_branch", session_data.get("session_type") != "checkout"
+    ):
         operations.delete_branch(session_data["branch_name"], repo_root)
 
     # Remove physical directory if it exists and is managed by par
@@ -558,7 +593,8 @@ def checkout_session(target: str, custom_label: Optional[str] = None, repo_path:
         "branch_name": branch_name,
         "created_at": datetime.datetime.utcnow().isoformat(),
         "session_type": "checkout",
-        "checkout_target": target
+        "checkout_target": target,
+        "managed_branch": False,
     }
     _add_session(session_data)
 

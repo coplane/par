@@ -8,7 +8,7 @@ from typing import List, Optional
 import typer
 
 from .checkout import CheckoutStrategy
-from .utils import get_git_repo_root, get_tmux_session_name, run_cmd
+from .utils import get_git_repo_root, run_cmd
 
 
 # Tmux utilities
@@ -39,21 +39,111 @@ def get_current_tmux_session() -> Optional[str]:
 
 
 # Git operations
-def create_worktree(label: str, worktree_path: Path, repo_root: Optional[Path] = None, base_branch: Optional[str] = None):
+def _resolve_base_ref(repo_root: Path, base_branch: str) -> str:
+    """Resolve a branch/reference to its commit SHA."""
+    try:
+        result = run_cmd(
+            ["git", "rev-parse", "--verify", f"{base_branch}^{{commit}}"],
+            cwd=repo_root,
+            suppress_output=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        typer.secho(
+            f"Failed to resolve base branch/reference '{base_branch}'.",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
+def create_worktree(
+    label: str,
+    worktree_path: Path,
+    repo_root: Optional[Path] = None,
+    base_branch: Optional[str] = None,
+    create_branch: bool = True,
+):
     """Create a new git worktree and branch."""
     if repo_root is None:
         repo_root = get_git_repo_root()
 
-    cmd = ["git", "worktree", "add", "-b", label, str(worktree_path)]
-    if base_branch:
-        cmd.append(base_branch)
+    def _build_worktree_add_cmd(use_create_branch: bool) -> list[str]:
+        cmd = ["git", "worktree", "add"]
+        if use_create_branch:
+            cmd.extend(["-b", label])
+        cmd.append(str(worktree_path))
 
+        if use_create_branch and base_branch:
+            # Resolve to a commit to ensure we never depend on working tree state.
+            cmd.append(_resolve_base_ref(repo_root, base_branch))
+        elif not use_create_branch:
+            cmd.append(label)
+        return cmd
+
+    cmd = _build_worktree_add_cmd(create_branch)
     try:
         run_cmd(cmd, cwd=repo_root)
         typer.secho(f"Created worktree '{label}' at {worktree_path}", fg="green")
+    except subprocess.CalledProcessError as e:
+        stderr = (e.stderr or "").lower()
+        # Race-proof behavior: if branch already exists, retry by checking out that branch.
+        if create_branch and "already exists" in stderr:
+            typer.secho(
+                f"Branch '{label}' already exists. Reusing existing branch.",
+                fg="yellow",
+            )
+            retry_cmd = _build_worktree_add_cmd(False)
+            try:
+                run_cmd(retry_cmd, cwd=repo_root)
+                typer.secho(
+                    f"Created worktree '{label}' at {worktree_path}", fg="green"
+                )
+                return
+            except Exception as retry_error:
+                typer.secho(
+                    f"Failed to create worktree '{label}': {retry_error}",
+                    fg="red",
+                    err=True,
+                )
+                raise typer.Exit(1)
+        typer.secho(f"Failed to create worktree '{label}': {e}", fg="red", err=True)
+        raise typer.Exit(1)
     except Exception as e:
         typer.secho(f"Failed to create worktree '{label}': {e}", fg="red", err=True)
         raise typer.Exit(1)
+
+
+def branch_exists(branch_name: str, repo_root: Optional[Path] = None) -> bool:
+    """Check if a local branch exists."""
+    if repo_root is None:
+        repo_root = get_git_repo_root()
+
+    result = run_cmd(
+        ["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch_name}"],
+        cwd=repo_root,
+        check=False,
+        suppress_output=True,
+    )
+    return result.returncode == 0
+
+
+def fetch_remote_branch(
+    branch_name: str, repo_root: Optional[Path] = None, remote: str = "origin"
+) -> bool:
+    """Fetch a specific remote branch. Returns True when found/fetched."""
+    if repo_root is None:
+        repo_root = get_git_repo_root()
+
+    try:
+        run_cmd(
+            ["git", "fetch", remote, branch_name],
+            cwd=repo_root,
+            suppress_output=True,
+        )
+        return True
+    except Exception:
+        return False
 
 
 def remove_worktree(worktree_path: Path, repo_root: Optional[Path] = None):
