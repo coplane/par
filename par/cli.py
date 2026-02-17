@@ -1,9 +1,8 @@
 # src/par/cli.py
 import importlib.metadata
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import typer
-from typing_extensions import Annotated
 
 from . import core, workspace
 
