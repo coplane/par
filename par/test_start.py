@@ -4,6 +4,8 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+from typer.testing import CliRunner
+
 from . import cli, core, operations
 
 
@@ -17,6 +19,24 @@ def test_cli_start_forwards_base_branch(mock_start_session):
         open_session=True,
     )
 
+    mock_start_session.assert_called_once_with(
+        "feature-auth",
+        repo_path="/tmp/repo",
+        open_session=True,
+        base_branch="develop",
+    )
+
+
+@patch("par.cli.core.start_session")
+def test_cli_create_alias_forwards_base_branch(mock_start_session):
+    """CLI create alias passes args through to core.start_session via start."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["create", "feature-auth", "--path", "/tmp/repo", "--base", "develop", "--open"],
+    )
+
+    assert result.exit_code == 0
     mock_start_session.assert_called_once_with(
         "feature-auth",
         repo_path="/tmp/repo",

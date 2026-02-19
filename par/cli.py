@@ -51,7 +51,8 @@ def main_callback(
     pass
 
 
-@app.command()
+@app.command("start")
+@app.command("create")
 def start(
     label: Annotated[
         str,
