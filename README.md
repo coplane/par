@@ -60,6 +60,7 @@ par control-center        # View ALL sessions and workspaces globally with separ
 
 ```bash
 par workspace start feature-auth --repos frontend,backend
+par workspace start feature-auth --repos frontend,backend --pull-default  # Pull default branch first
 par workspace code feature-auth     # Open in VSCode with multi-repo support
 par workspace open feature-auth     # Attach to unified tmux session
 ```
@@ -325,7 +326,7 @@ par workspace cursor feature-auth   # Cursor
 **Create a workspace:**
 
 ```bash
-par workspace start <label> [--path /workspace/root] [--repos repo1,repo2] [--open]
+par workspace start <label> [--path /workspace/root] [--repos repo1,repo2] [--open] [--pull-default]
 ```
 
 **List workspaces (now unified with sessions):**
@@ -533,6 +534,24 @@ Workspaces create branches from the **currently checked out branch** in each rep
 - **Feature branches from develop**: If repos are on `develop`, workspace branches from `develop`
 - **Different base branches**: Each repo can be on different branches before workspace creation
 - **Flexible workflows**: Supports GitFlow, GitHub Flow, or custom branching strategies
+
+**Keeping branches up-to-date with `--pull-default`:**
+
+Use the `--pull-default` flag to automatically pull each repository's default branch (determined via `origin/HEAD`) before creating workspace branches:
+
+```bash
+par workspace start feature-auth --repos frontend,backend --pull-default
+```
+
+This will:
+1. Determine each repo's default branch (e.g. `main`) via `origin/HEAD`
+2. Checkout that branch in each repo
+3. Run `git pull --ff-only` to update it
+4. Create workspace branches from the updated default branch
+
+This ensures your workspace branches are always based on the latest upstream code, removing the need to manually checkout and pull each repo beforehand.
+
+> **Note**: If `origin/HEAD` is not set for a repository, run `git remote set-head origin --auto` in that repo first. The pull uses `--ff-only` for safety — if a non-fast-forward update is needed, the operation will fail with a clear error.
 
 ## Advanced Usage
 

@@ -29,9 +29,7 @@ def get_current_tmux_session() -> Optional[str]:
         return None
     try:
         result = run_cmd(
-            ["tmux", "display-message", "-p", "#S"], 
-            capture=True, 
-            suppress_output=True
+            ["tmux", "display-message", "-p", "#S"], capture=True, suppress_output=True
         )
         return result.stdout.strip() if result.stdout else None
     except subprocess.CalledProcessError:
@@ -162,7 +160,10 @@ def remove_worktree(worktree_path: Path, repo_root: Optional[Path] = None):
 
 
 def checkout_worktree(
-    branch_name: str, worktree_path: Path, strategy: CheckoutStrategy, repo_root: Optional[Path] = None
+    branch_name: str,
+    worktree_path: Path,
+    strategy: CheckoutStrategy,
+    repo_root: Optional[Path] = None,
 ):
     """Create worktree from existing branch."""
     if repo_root is None:
@@ -307,13 +308,21 @@ def _update_control_center_windows(session_name: str, contexts_data: List[dict])
     """Update control center windows to match current contexts."""
     # Get current windows in the control center session
     try:
-        result = run_cmd([
-            "tmux", "list-windows", "-t", session_name, "-F", "#{window_index}:#{window_name}"
-        ], capture=True)
+        result = run_cmd(
+            [
+                "tmux",
+                "list-windows",
+                "-t",
+                session_name,
+                "-F",
+                "#{window_index}:#{window_name}",
+            ],
+            capture=True,
+        )
         current_windows = {}
-        for line in result.stdout.strip().split('\n'):
-            if ':' in line:
-                index, name = line.split(':', 1)
+        for line in result.stdout.strip().split("\n"):
+            if ":" in line:
+                index, name = line.split(":", 1)
                 current_windows[name] = int(index)
     except Exception:
         # If we can't get windows, fall back to recreating the session
@@ -336,10 +345,18 @@ def _update_control_center_windows(session_name: str, contexts_data: List[dict])
     for i, context in enumerate(contexts_data):
         if context["name"] not in existing_names:
             # Create new window
-            run_cmd([
-                "tmux", "new-window", "-t", session_name,
-                "-n", context["name"], "-c", context["path"]
-            ])
+            run_cmd(
+                [
+                    "tmux",
+                    "new-window",
+                    "-t",
+                    session_name,
+                    "-n",
+                    context["name"],
+                    "-c",
+                    context["path"],
+                ]
+            )
         # If window exists, we could update its working directory, but tmux doesn't
         # have a direct command for this. The window will retain its original path.
 
@@ -369,7 +386,8 @@ def open_control_center(contexts_data: List[dict]):
     # Check if control center already exists
     if tmux_session_exists(cc_session_name):
         typer.secho(
-            f"Updating existing control center '{cc_session_name}' with current sessions", fg="cyan"
+            f"Updating existing control center '{cc_session_name}' with current sessions",
+            fg="cyan",
         )
         if _update_control_center_windows(cc_session_name, contexts_data):
             open_tmux_session(cc_session_name)
@@ -381,22 +399,78 @@ def open_control_center(contexts_data: List[dict]):
     create_tmux_session(cc_session_name, Path(first_context["path"]))
 
     # Rename first window
-    run_cmd([
-        "tmux", "rename-window", "-t", f"{cc_session_name}:0", first_context["name"]
-    ])
+    run_cmd(
+        ["tmux", "rename-window", "-t", f"{cc_session_name}:0", first_context["name"]]
+    )
 
     # Create additional windows for remaining contexts
     for context in contexts_data[1:]:
-        run_cmd([
-            "tmux", "new-window", "-t", cc_session_name,
-            "-n", context["name"], "-c", context["path"]
-        ])
+        run_cmd(
+            [
+                "tmux",
+                "new-window",
+                "-t",
+                cc_session_name,
+                "-n",
+                context["name"],
+                "-c",
+                context["path"],
+            ]
+        )
 
     # Select window 0 before attaching
     run_cmd(["tmux", "select-window", "-t", f"{cc_session_name}:0"])
 
-    typer.secho(f"Created control center with {len(contexts_data)} windows.", fg="green")
+    typer.secho(
+        f"Created control center with {len(contexts_data)} windows.", fg="green"
+    )
     open_tmux_session(cc_session_name)
+
+
+def get_default_branch(repo_path: Path) -> str:
+    """Get the default branch name for a repository via origin/HEAD."""
+    try:
+        result = run_cmd(
+            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+            cwd=repo_path,
+            suppress_output=True,
+        )
+        # Output is like "refs/remotes/origin/main" -> extract "main"
+        return result.stdout.strip().removeprefix("refs/remotes/origin/")
+    except Exception:
+        typer.secho(
+            f"Could not determine default branch for {repo_path.name}. "
+            "Try running 'git remote set-head origin --auto' in that repo.",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
+def pull_default_branch(repo_path: Path, branch_name: str):
+    """Checkout the default branch and pull with --ff-only."""
+    try:
+        run_cmd(["git", "checkout", branch_name], cwd=repo_path, suppress_output=True)
+    except Exception:
+        typer.secho(
+            f"Failed to checkout '{branch_name}' in {repo_path.name}. "
+            "Ensure working tree is clean.",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        run_cmd(["git", "pull", "--ff-only"], cwd=repo_path, suppress_output=True)
+        typer.secho(f"Pulled '{branch_name}' in {repo_path.name}", fg="cyan")
+    except Exception:
+        typer.secho(
+            f"Failed to pull '{branch_name}' in {repo_path.name}. "
+            "Non-fast-forward updates are not supported.",
+            fg="red",
+            err=True,
+        )
+        raise typer.Exit(1)
 
 
 def create_workspace_worktree(
