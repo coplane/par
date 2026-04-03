@@ -63,8 +63,9 @@ def start(
     path: Annotated[
         Optional[str],
         typer.Option(
-            "--path", "-p",
-            help="Path to git repository (defaults to current directory)"
+            "--path",
+            "-p",
+            help="Path to git repository (defaults to current directory)",
         ),
     ] = None,
     base_branch: Annotated[
@@ -81,6 +82,13 @@ def start(
             "--open", help="Automatically open/attach to the session after creation."
         ),
     ] = False,
+    pull_default: Annotated[
+        bool,
+        typer.Option(
+            "--pull-default",
+            help="Pull the default branch (via origin/HEAD) before creating the worktree branch",
+        ),
+    ] = False,
 ):
     """
     Start a new git worktree and tmux session.
@@ -93,6 +101,7 @@ def start(
         repo_path=path,
         open_session=open_session,
         base_branch=base_branch,
+        pull_default=pull_default,
     )
 
 
@@ -166,8 +175,9 @@ def checkout(
     path: Annotated[
         Optional[str],
         typer.Option(
-            "--path", "-p",
-            help="Path to git repository (defaults to current directory)"
+            "--path",
+            "-p",
+            help="Path to git repository (defaults to current directory)",
         ),
     ] = None,
     label: Annotated[
@@ -246,8 +256,9 @@ def workspace_start(
     path: Annotated[
         Optional[str],
         typer.Option(
-            "--path", "-p",
-            help="Path to workspace directory (defaults to current directory)"
+            "--path",
+            "-p",
+            help="Path to workspace directory (defaults to current directory)",
         ),
     ] = None,
     repos: Annotated[
@@ -262,6 +273,13 @@ def workspace_start(
         bool,
         typer.Option("--open", help="Automatically open the workspace after creation"),
     ] = False,
+    pull_default: Annotated[
+        bool,
+        typer.Option(
+            "--pull-default",
+            help="Pull each repo's default branch (via origin/HEAD) before creating workspace branches",
+        ),
+    ] = False,
 ):
     """
     Start a new multi-repository workspace.
@@ -273,7 +291,13 @@ def workspace_start(
     if repos:
         repo_list = [r.strip() for r in repos.split(",") if r.strip()]
 
-    workspace.start_workspace_session(label, workspace_path=path, repos=repo_list, open_session=open_session)
+    workspace.start_workspace_session(
+        label,
+        workspace_path=path,
+        repos=repo_list,
+        open_session=open_session,
+        pull_default=pull_default,
+    )
 
 
 @workspace_app.command("ls")

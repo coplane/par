@@ -24,23 +24,33 @@ def _add_workspace_session(workspace_data: Dict[str, Any]):
     core._add_session(workspace_data)
 
 
-
-
 # Workspace operations
 def start_workspace_session(
-    label: str, workspace_path: Optional[str] = None, repos: Optional[List[str]] = None, open_session: bool = False
+    label: str,
+    workspace_path: Optional[str] = None,
+    repos: Optional[List[str]] = None,
+    open_session: bool = False,
+    pull_default: bool = False,
 ):
     """Start a new workspace with multiple repositories."""
     # Validate label is globally unique
     if not _validate_workspace_label_unique(label):
-        typer.secho(f"Error: Label '{label}' already exists. Labels must be globally unique.", fg="red", err=True)
+        typer.secho(
+            f"Error: Label '{label}' already exists. Labels must be globally unique.",
+            fg="red",
+            err=True,
+        )
         raise typer.Exit(1)
 
     # Resolve workspace directory
     if workspace_path:
         workspace_root = Path(workspace_path).resolve()
         if not workspace_root.exists():
-            typer.secho(f"Error: Directory '{workspace_path}' does not exist.", fg="red", err=True)
+            typer.secho(
+                f"Error: Directory '{workspace_path}' does not exist.",
+                fg="red",
+                err=True,
+            )
             raise typer.Exit(1)
     else:
         workspace_root = Path.cwd()
@@ -63,7 +73,7 @@ def start_workspace_session(
         repo_paths = []
         for repo_spec in repos:
             # Support both absolute paths and relative names
-            if repo_spec.startswith('/') or Path(repo_spec).is_absolute():
+            if repo_spec.startswith("/") or Path(repo_spec).is_absolute():
                 # Absolute path provided
                 repo_path = Path(repo_spec).resolve()
                 repo_name = repo_path.name
@@ -74,7 +84,9 @@ def start_workspace_session(
 
             if not repo_path.exists():
                 typer.secho(
-                    f"Error: Repository path '{repo_path}' does not exist.", fg="red", err=True
+                    f"Error: Repository path '{repo_path}' does not exist.",
+                    fg="red",
+                    err=True,
                 )
                 raise typer.Exit(1)
             if not (repo_path / ".git").exists():
@@ -85,6 +97,15 @@ def start_workspace_session(
 
             repo_names.append(repo_name)
             repo_paths.append(repo_path)
+
+    # If --pull-default, update each repo's default branch before creating worktrees
+    default_branches: dict[str, str] = {}
+    if pull_default:
+        typer.secho("Pulling default branch for each repository...", fg="cyan")
+        for repo_path in repo_paths:
+            default_branch = operations.get_default_branch(repo_path)
+            operations.pull_default_branch(repo_path, default_branch)
+            default_branches[str(repo_path)] = default_branch
 
     session_name = utils.get_workspace_session_name(workspace_root, label)
 
@@ -107,15 +128,16 @@ def start_workspace_session(
             )
             raise typer.Exit(1)
 
-        # Create resources
-        operations.create_workspace_worktree(repo_path, label, worktree_path)
+        # Create resources - use pulled default branch as base when --pull-default
+        base_branch = default_branches.get(str(repo_path))
+        operations.create_workspace_worktree(
+            repo_path, label, worktree_path, base_branch=base_branch
+        )
 
         # Copy includes for this repository
         config = initialization.load_par_config(repo_path)
         if config:
-            initialization.copy_included_files(
-                config, repo_path, worktree_path
-            )
+            initialization.copy_included_files(config, repo_path, worktree_path)
 
         repos_data.append(
             {
@@ -176,7 +198,9 @@ def start_workspace_session(
 def list_workspace_sessions():
     """List all workspace sessions globally (now shown in main par ls)."""
     all_sessions = core._get_all_sessions()
-    workspace_sessions = {k: v for k, v in all_sessions.items() if v.get("session_type") == "workspace"}
+    workspace_sessions = {
+        k: v for k, v in all_sessions.items() if v.get("session_type") == "workspace"
+    }
 
     if not workspace_sessions:
         typer.secho("No workspace sessions found.", fg="yellow")
@@ -184,7 +208,9 @@ def list_workspace_sessions():
         return
 
     console = Console()
-    table = Table(show_header=True, header_style="bold magenta", title="Workspace Sessions")
+    table = Table(
+        show_header=True, header_style="bold magenta", title="Workspace Sessions"
+    )
     table.add_column("Label", style="cyan", no_wrap=True)
     table.add_column("Repositories", style="green")
     table.add_column("Session", style="magenta", no_wrap=True)
@@ -225,7 +251,9 @@ def remove_all_workspace_sessions():
     """Remove all workspace sessions globally."""
     # Get all workspace sessions from global sessions
     all_sessions = core._get_all_sessions()
-    workspace_sessions = {k: v for k, v in all_sessions.items() if v.get("session_type") == "workspace"}
+    workspace_sessions = {
+        k: v for k, v in all_sessions.items() if v.get("session_type") == "workspace"
+    }
 
     if not workspace_sessions:
         typer.secho("No workspace sessions to remove.", fg="yellow")

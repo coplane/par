@@ -39,7 +39,9 @@ def _load_global_state() -> Dict[str, Any]:
                 state["workspaces"] = {}
             return state
     except json.JSONDecodeError:
-        typer.secho("Warning: Global state file corrupted. Starting fresh.", fg="yellow")
+        typer.secho(
+            "Warning: Global state file corrupted. Starting fresh.", fg="yellow"
+        )
         return {"sessions": {}, "workspaces": {}}
 
 
@@ -73,12 +75,12 @@ def _resolve_previous_session_label() -> str:
     if not previous_session:
         typer.secho("Error: No previous session found.", fg="red", err=True)
         raise typer.Exit(1)
-    
+
     # Check if we're already in the previous session
     current_tmux_session = operations.get_current_tmux_session()
     if not current_tmux_session:
         return previous_session
-    
+
     # Find which of our tracked sessions corresponds to the current tmux session
     state = _load_global_state()
     current_par_session = None
@@ -86,16 +88,20 @@ def _resolve_previous_session_label() -> str:
         if session_data["tmux_session_name"] == current_tmux_session:
             current_par_session = session_label
             break
-    
+
     # If we're already in the "previous" session, go to the last session instead
     if current_par_session == previous_session:
         last_session = state.get("last_session")
         if last_session and last_session != current_par_session:
             return last_session
         else:
-            typer.secho("Error: Cannot determine which session to switch to.", fg="red", err=True)
+            typer.secho(
+                "Error: Cannot determine which session to switch to.",
+                fg="red",
+                err=True,
+            )
             raise typer.Exit(1)
-    
+
     return previous_session
 
 
@@ -133,8 +139,10 @@ def _migrate_legacy_state() -> Dict[str, Any]:
                         "tmux_session_name": session_data["tmux_session_name"],
                         "branch_name": session_data["branch_name"],
                         "created_at": session_data["created_at"],
-                        "session_type": "checkout" if session_data.get("is_checkout") else "session",
-                        "checkout_target": session_data.get("checkout_target")
+                        "session_type": "checkout"
+                        if session_data.get("is_checkout")
+                        else "session",
+                        "checkout_target": session_data.get("checkout_target"),
                     }
         except (json.JSONDecodeError, FileNotFoundError):
             pass
@@ -151,8 +159,10 @@ def _migrate_legacy_state() -> Dict[str, Any]:
                     # Create globally unique label if collision
                     global_label = label
                     counter = 1
-                    while (global_label in migrated["sessions"] or
-                           global_label in migrated["workspaces"]):
+                    while (
+                        global_label in migrated["sessions"]
+                        or global_label in migrated["workspaces"]
+                    ):
                         workspace_name = Path(workspace_root).name
                         global_label = f"{label}-{workspace_name.lower()}-{counter}"
                         counter += 1
@@ -162,7 +172,7 @@ def _migrate_legacy_state() -> Dict[str, Any]:
                         "workspace_root": workspace_data["workspace_root"],
                         "session_name": workspace_data["session_name"],
                         "repos": workspace_data["repos"],
-                        "created_at": workspace_data["created_at"]
+                        "created_at": workspace_data["created_at"],
                     }
         except (json.JSONDecodeError, FileNotFoundError):
             pass
@@ -177,7 +187,9 @@ def _migrate_legacy_state() -> Dict[str, Any]:
         if legacy_workspace_file.exists():
             shutil.copy2(legacy_workspace_file, backup_dir / "workspaces.json.backup")
 
-        typer.secho(f"Migrated legacy state files. Backups saved to {backup_dir}", fg="green")
+        typer.secho(
+            f"Migrated legacy state files. Backups saved to {backup_dir}", fg="green"
+        )
 
     return migrated
 
@@ -218,19 +230,22 @@ def _get_session(label: str) -> Optional[Dict[str, Any]]:
     return state["sessions"].get(label)
 
 
-
-
 # Session operations - now globally scoped
 def start_session(
     label: str,
     repo_path: Optional[str] = None,
     open_session: bool = False,
     base_branch: Optional[str] = None,
+    pull_default: bool = False,
 ):
     """Start a new git worktree and tmux session."""
     # Validate label is globally unique
     if not _validate_label_unique(label):
-        typer.secho(f"Error: Label '{label}' already exists. Labels must be globally unique.", fg="red", err=True)
+        typer.secho(
+            f"Error: Label '{label}' already exists. Labels must be globally unique.",
+            fg="red",
+            err=True,
+        )
         raise typer.Exit(1)
 
     # Resolve repository path
@@ -250,6 +265,14 @@ def start_session(
     if operations.tmux_session_exists(session_name):
         typer.secho(f"Error: tmux session '{session_name}' exists.", fg="red", err=True)
         raise typer.Exit(1)
+
+    # If --pull-default, update the default branch before creating the worktree
+    if pull_default:
+        default_branch = operations.get_default_branch(repo_root)
+        operations.pull_default_branch(repo_root, default_branch)
+        # Use the pulled default branch as base unless --base was explicitly provided
+        if not base_branch:
+            base_branch = default_branch
 
     # If label already exists as a branch, reuse it instead of creating one.
     label_branch_exists = operations.branch_exists(label, repo_root)
@@ -303,7 +326,9 @@ def start_session(
     _add_session(session_data)
 
     typer.secho(
-        f"Successfully started session '{label}' in {repo_name}.", fg="bright_green", bold=True
+        f"Successfully started session '{label}' in {repo_name}.",
+        fg="bright_green",
+        bold=True,
     )
     typer.echo(f"  Repository: {repo_root}")
     typer.echo(f"  Worktree: {worktree_path}")
@@ -389,7 +414,8 @@ def _remove_workspace_session(session_data: Dict[str, Any]):
             shutil.rmtree(workspace_root)
         except OSError as e:
             typer.secho(
-                f"Warning: Could not remove workspace directory {workspace_root}: {e}", fg="yellow"
+                f"Warning: Could not remove workspace directory {workspace_root}: {e}",
+                fg="yellow",
             )
 
 
@@ -408,10 +434,16 @@ def remove_all_sessions():
         return
 
     # Separate regular sessions from workspaces for display
-    regular_sessions = {k: v for k, v in sessions.items() if v.get("session_type") != "workspace"}
-    workspace_sessions = {k: v for k, v in sessions.items() if v.get("session_type") == "workspace"}
+    regular_sessions = {
+        k: v for k, v in sessions.items() if v.get("session_type") != "workspace"
+    }
+    workspace_sessions = {
+        k: v for k, v in sessions.items() if v.get("session_type") == "workspace"
+    }
 
-    typer.echo(f"This will remove {len(regular_sessions)} sessions and {len(workspace_sessions)} workspaces:")
+    typer.echo(
+        f"This will remove {len(regular_sessions)} sessions and {len(workspace_sessions)} workspaces:"
+    )
     for label in regular_sessions:
         typer.echo(f"  Session: {label}")
     for label in workspace_sessions:
@@ -485,7 +517,9 @@ def list_sessions():
             # Display workspace info
             workspace_repos = data.get("workspace_repos", [])
             repo_names = [repo["repo_name"] for repo in workspace_repos]
-            repo_display = f"workspace ({len(repo_names)} repos: {', '.join(repo_names)})"
+            repo_display = (
+                f"workspace ({len(repo_names)} repos: {', '.join(repo_names)})"
+            )
         else:
             # Display regular session info
             repo_display = f"{data['repository_name']} ({Path(data['repository_path']).parent.name})"
@@ -536,7 +570,9 @@ def open_session(label: str):
     raise typer.Exit(1)
 
 
-def checkout_session(target: str, custom_label: Optional[str] = None, repo_path: Optional[str] = None):
+def checkout_session(
+    target: str, custom_label: Optional[str] = None, repo_path: Optional[str] = None
+):
     """Checkout existing branch or PR into new session."""
     try:
         # Parse target to determine branch name and checkout strategy
@@ -550,7 +586,11 @@ def checkout_session(target: str, custom_label: Optional[str] = None, repo_path:
 
     # Validate label is globally unique
     if not _validate_label_unique(label):
-        typer.secho(f"Error: Label '{label}' already exists. Labels must be globally unique.", fg="red", err=True)
+        typer.secho(
+            f"Error: Label '{label}' already exists. Labels must be globally unique.",
+            fg="red",
+            err=True,
+        )
         raise typer.Exit(1)
 
     # Resolve repository path
@@ -579,9 +619,7 @@ def checkout_session(target: str, custom_label: Optional[str] = None, repo_path:
     config = initialization.load_par_config(repo_root)
     if config:
         initialization.copy_included_files(config, repo_root, worktree_path)
-        initialization.run_initialization(
-            config, session_name, worktree_path
-        )
+        initialization.run_initialization(config, session_name, worktree_path)
 
     # Create session data for global state
     session_data = {
@@ -631,7 +669,7 @@ def open_control_center():
             all_repos.add(f"workspace-{label}")
         else:
             # For regular sessions, use repository name
-            all_repos.add(data['repository_name'])
+            all_repos.add(data["repository_name"])
 
     # Determine if we need to include repo names (more than one unique repo)
     include_repo_name = len(all_repos) > 1
@@ -645,21 +683,19 @@ def open_control_center():
 
         if session_type == "workspace":
             # For workspaces, create single window starting from workspace root
-            workspace_root = data["repository_path"]  # This is the workspace root directory
+            workspace_root = data[
+                "repository_path"
+            ]  # This is the workspace root directory
             name = f"workspace-{label}" if include_repo_name else label
-            active_contexts.append({
-                "name": name,
-                "path": workspace_root,
-                "type": "workspace"
-            })
+            active_contexts.append(
+                {"name": name, "path": workspace_root, "type": "workspace"}
+            )
         else:
             # For regular sessions, create single window
-            repo_name = data['repository_name']
+            repo_name = data["repository_name"]
             name = f"{repo_name}-{label}" if include_repo_name else label
-            active_contexts.append({
-                "name": name,
-                "path": data["worktree_path"],
-                "type": "session"
-            })
+            active_contexts.append(
+                {"name": name, "path": data["worktree_path"], "type": "session"}
+            )
 
     operations.open_control_center(active_contexts)

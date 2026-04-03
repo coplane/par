@@ -29,6 +29,7 @@ https://github.com/user-attachments/assets/88eb4aed-c00d-4238-b1a9-bcaa34c975c3
 # From within a git repository
 par start feature-auth    # Creates worktree, branch, and tmux session
 par start feature-auth --base develop
+par start feature-auth --pull-default  # Pull default branch first
 
 # From anywhere on your system
 par start bugfix-login --path /path/to/repo
@@ -60,6 +61,7 @@ par control-center        # View ALL sessions and workspaces globally with separ
 
 ```bash
 par workspace start feature-auth --repos frontend,backend
+par workspace start feature-auth --repos frontend,backend --pull-default  # Pull default branch first
 par workspace code feature-auth     # Open in VSCode with multi-repo support
 par workspace open feature-auth     # Attach to unified tmux session
 ```
@@ -134,6 +136,7 @@ Create a new isolated development environment:
 # From within a git repository
 par start my-feature
 par start my-feature --base develop
+par start my-feature --pull-default
 
 # From anywhere, specifying the repository path
 par start my-feature --path /path/to/your/git/repo
@@ -141,6 +144,8 @@ par start my-feature -p ~/projects/my-app
 ```
 
 By default, `par start` branches from the current `HEAD` commit. Use `--base` to branch from a specific branch/reference. `par` resolves the base to a commit SHA, so uncommitted changes in your current worktree do not affect the new branch.
+
+Use `--pull-default` to pull the repository's default branch (determined via `origin/HEAD`) before creating the worktree branch. If no `--base` is provided, the new branch will be based on the freshly pulled default branch. If both `--pull-default` and `--base` are provided, the default branch is still pulled but `--base` takes precedence for the branch point.
 
 If the label already matches an existing local branch, `par start <label>` will reuse that branch and create a worktree with it checked out instead of creating a new branch.
 If no local branch exists but `origin/<label>` exists, `par` fetches it and creates the worktree from `origin/<label>`.
@@ -325,7 +330,7 @@ par workspace cursor feature-auth   # Cursor
 **Create a workspace:**
 
 ```bash
-par workspace start <label> [--path /workspace/root] [--repos repo1,repo2] [--open]
+par workspace start <label> [--path /workspace/root] [--repos repo1,repo2] [--open] [--pull-default]
 ```
 
 **List workspaces (now unified with sessions):**
@@ -533,6 +538,28 @@ Workspaces create branches from the **currently checked out branch** in each rep
 - **Feature branches from develop**: If repos are on `develop`, workspace branches from `develop`
 - **Different base branches**: Each repo can be on different branches before workspace creation
 - **Flexible workflows**: Supports GitFlow, GitHub Flow, or custom branching strategies
+
+**Keeping branches up-to-date with `--pull-default`:**
+
+Use the `--pull-default` flag to automatically pull each repository's default branch (determined via `origin/HEAD`) before creating workspace branches:
+
+```bash
+# Single-repo session
+par start feature-auth --pull-default
+
+# Multi-repo workspace
+par workspace start feature-auth --repos frontend,backend --pull-default
+```
+
+This will:
+1. Determine each repo's default branch (e.g. `main`) via `origin/HEAD`
+2. Checkout that branch in each repo
+3. Run `git pull --ff-only` to update it
+4. Create workspace branches from the updated default branch
+
+This ensures your workspace branches are always based on the latest upstream code, removing the need to manually checkout and pull each repo beforehand.
+
+> **Note**: If `origin/HEAD` is not set for a repository, run `git remote set-head origin --auto` in that repo first. The pull uses `--ff-only` for safety — if a non-fast-forward update is needed, the operation will fail with a clear error.
 
 ## Advanced Usage
 
