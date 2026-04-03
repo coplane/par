@@ -17,6 +17,7 @@ def test_cli_start_forwards_base_branch(mock_start_session):
         path="/tmp/repo",
         base_branch="develop",
         open_session=True,
+        pull_default=False,
     )
 
     mock_start_session.assert_called_once_with(
@@ -24,6 +25,7 @@ def test_cli_start_forwards_base_branch(mock_start_session):
         repo_path="/tmp/repo",
         open_session=True,
         base_branch="develop",
+        pull_default=False,
     )
 
 
@@ -33,7 +35,15 @@ def test_cli_create_alias_forwards_base_branch(mock_start_session):
     runner = CliRunner()
     result = runner.invoke(
         cli.app,
-        ["create", "feature-auth", "--path", "/tmp/repo", "--base", "develop", "--open"],
+        [
+            "create",
+            "feature-auth",
+            "--path",
+            "/tmp/repo",
+            "--base",
+            "develop",
+            "--open",
+        ],
     )
 
     assert result.exit_code == 0
@@ -42,6 +52,45 @@ def test_cli_create_alias_forwards_base_branch(mock_start_session):
         repo_path="/tmp/repo",
         open_session=True,
         base_branch="develop",
+        pull_default=False,
+    )
+
+
+@patch("par.cli.core.start_session")
+def test_cli_start_forwards_pull_default(mock_start_session):
+    """CLI start passes --pull-default through to core.start_session."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["start", "feature-auth", "--path", "/tmp/repo", "--pull-default"],
+    )
+
+    assert result.exit_code == 0
+    mock_start_session.assert_called_once_with(
+        "feature-auth",
+        repo_path="/tmp/repo",
+        open_session=False,
+        base_branch=None,
+        pull_default=True,
+    )
+
+
+@patch("par.cli.core.start_session")
+def test_cli_start_pull_default_off_by_default(mock_start_session):
+    """pull_default defaults to False when flag is not provided."""
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["start", "feature-auth", "--path", "/tmp/repo"],
+    )
+
+    assert result.exit_code == 0
+    mock_start_session.assert_called_once_with(
+        "feature-auth",
+        repo_path="/tmp/repo",
+        open_session=False,
+        base_branch=None,
+        pull_default=False,
     )
 
 
@@ -72,6 +121,90 @@ def test_start_session_passes_base_branch(
     """Core start session forwards base branch to worktree creation."""
     core.start_session("feature-auth", base_branch="develop")
 
+    mock_create_worktree.assert_called_once_with(
+        "feature-auth",
+        Path("/tmp/worktree"),
+        Path("/tmp/repo"),
+        base_branch="develop",
+        create_branch=True,
+    )
+
+
+@patch("par.core._add_session")
+@patch("par.core.initialization.load_par_config", return_value=None)
+@patch("par.core.operations.create_tmux_session")
+@patch("par.core.operations.create_worktree")
+@patch("par.core.operations.fetch_remote_branch", return_value=False)
+@patch("par.core.operations.branch_exists", return_value=False)
+@patch("par.core.operations.tmux_session_exists", return_value=False)
+@patch("par.core.utils.get_tmux_session_name", return_value="par-repo-1234-feature")
+@patch("par.core.utils.get_worktree_path", return_value=Path("/tmp/worktree"))
+@patch("par.core.utils.resolve_repository_path", return_value=Path("/tmp/repo"))
+@patch("par.core._validate_label_unique", return_value=True)
+@patch("par.core.operations.pull_default_branch")
+@patch("par.core.operations.get_default_branch", return_value="main")
+def test_start_session_pull_default_uses_default_branch_as_base(
+    mock_get_default,
+    mock_pull_default,
+    _mock_label_unique,
+    _mock_resolve_repo,
+    _mock_get_worktree_path,
+    _mock_get_tmux_name,
+    _mock_tmux_exists,
+    _mock_branch_exists,
+    _mock_fetch_remote,
+    mock_create_worktree,
+    _mock_create_tmux,
+    _mock_load_config,
+    _mock_add_session,
+):
+    """With pull_default, start_session pulls default branch and uses it as base."""
+    core.start_session("feature-auth", pull_default=True)
+
+    mock_get_default.assert_called_once_with(Path("/tmp/repo"))
+    mock_pull_default.assert_called_once_with(Path("/tmp/repo"), "main")
+    mock_create_worktree.assert_called_once_with(
+        "feature-auth",
+        Path("/tmp/worktree"),
+        Path("/tmp/repo"),
+        base_branch="main",
+        create_branch=True,
+    )
+
+
+@patch("par.core._add_session")
+@patch("par.core.initialization.load_par_config", return_value=None)
+@patch("par.core.operations.create_tmux_session")
+@patch("par.core.operations.create_worktree")
+@patch("par.core.operations.fetch_remote_branch", return_value=False)
+@patch("par.core.operations.branch_exists", return_value=False)
+@patch("par.core.operations.tmux_session_exists", return_value=False)
+@patch("par.core.utils.get_tmux_session_name", return_value="par-repo-1234-feature")
+@patch("par.core.utils.get_worktree_path", return_value=Path("/tmp/worktree"))
+@patch("par.core.utils.resolve_repository_path", return_value=Path("/tmp/repo"))
+@patch("par.core._validate_label_unique", return_value=True)
+@patch("par.core.operations.pull_default_branch")
+@patch("par.core.operations.get_default_branch", return_value="main")
+def test_start_session_pull_default_with_explicit_base(
+    mock_get_default,
+    mock_pull_default,
+    _mock_label_unique,
+    _mock_resolve_repo,
+    _mock_get_worktree_path,
+    _mock_get_tmux_name,
+    _mock_tmux_exists,
+    _mock_branch_exists,
+    _mock_fetch_remote,
+    mock_create_worktree,
+    _mock_create_tmux,
+    _mock_load_config,
+    _mock_add_session,
+):
+    """With pull_default and explicit --base, --base takes precedence."""
+    core.start_session("feature-auth", base_branch="develop", pull_default=True)
+
+    mock_get_default.assert_called_once_with(Path("/tmp/repo"))
+    mock_pull_default.assert_called_once_with(Path("/tmp/repo"), "main")
     mock_create_worktree.assert_called_once_with(
         "feature-auth",
         Path("/tmp/worktree"),
