@@ -82,6 +82,13 @@ def start(
             "--open", help="Automatically open/attach to the session after creation."
         ),
     ] = False,
+    pull_default: Annotated[
+        bool,
+        typer.Option(
+            "--pull-default",
+            help="Pull the default branch (via origin/HEAD) before creating the worktree branch",
+        ),
+    ] = False,
 ):
     """
     Start a new git worktree and tmux session.
@@ -94,6 +101,7 @@ def start(
         repo_path=path,
         open_session=open_session,
         base_branch=base_branch,
+        pull_default=pull_default,
     )
 
 
